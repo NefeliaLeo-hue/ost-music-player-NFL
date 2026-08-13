@@ -197,23 +197,18 @@ console.log("[OST Player] INIT START");
     playerDOM.addEventListener('pointerup', endDrag);
     playerDOM.addEventListener('pointercancel', endDrag);
 
-        // =====================
-    // 缩放与恢复逻辑
+// =====================
+    // 缩放点击逻辑 (保持不变)
     // =====================
     
-    // 点击 🔽 按钮最小化
-    $(document).on('click', '#ost-min-btn', function(e) {
-        e.stopPropagation(); // 防止点穿
+    $('#ost-min-btn').on('click', function(e) {
+        e.stopPropagation(); 
         $('#ost-player-container').addClass('minimized');
-        console.log('[OST Player] 触发最小化');
     });
 
-    // 点击小球恢复原本形态
-    $(document).on('click', '#ost-player-container', function(e) {
-        // 必须是 minimized 状态，且没有在被拖拽 (isMoved 为 false) 时点击才生效
+    $('#ost-player-container').on('click', function(e) {
         if ($(this).hasClass('minimized') && !isMoved) {
             $(this).removeClass('minimized');
-            console.log('[OST Player] 触发窗口恢复');
         }
     });
 

@@ -247,61 +247,30 @@ jQuery(async function () {
     
     let tempPlaylist = [...playlist]; 
 
-    function renderPlaylist() {
-        playlistContainer.innerHTML = '';
-        
-        tempPlaylist.forEach((link, index) => {
-            const li = document.createElement('li');
-            li.className = 'ost-playlist-item';
-            li.draggable = true;
-            
-            li.innerHTML = `
-                <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 8px; color: #52525b;">☰</span>
-                <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
-                <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 4px;">❌</span>
-            `;
-
-            li.querySelector('.ost-delete-btn').addEventListener('click', () => {
-                tempPlaylist.splice(index, 1);
-                renderPlaylist();
-            });
-
-            li.addEventListener('dragstart', () => {
-                li.classList.add('dragging');
-            });
-
-            li.addEventListener('dragend', () => {
-                li.classList.remove('dragging');
-                const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
-                tempPlaylist = currentItems.map(item => item.getAttribute('title'));
-            });
-
-            playlistContainer.appendChild(li);
-        });
-    }
-
         function renderPlaylist() {
         playlistContainer.innerHTML = '';
         
         tempPlaylist.forEach((link, index) => {
             const li = document.createElement('li');
             li.className = 'ost-playlist-item';
-            // 【关键1】移除 draggable，加入 touch-action: none 禁用移动端默认滚动
-            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; touch-action: none;";
+            
+            // 【修复1】删掉这里的 touch-action: none，让整行文字区域可以正常上下滑动
+            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none;";
             
             li.innerHTML = `
+                <!-- 【修复2】只在汉堡图标 ☰ 上保留 touch-action: none，确保只有按住图标时才触发拖拽，不影响网页滚动 -->
                 <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
                 <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
                 <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
             `;
 
-            // 【事件绑定】删除单行
+            // 删除单行事件
             li.querySelector('.ost-delete-btn').addEventListener('click', () => {
                 tempPlaylist.splice(index, 1);
                 renderPlaylist();
             });
 
-            // 【关键2】使用 Pointer Events 实现 PC/手机双端通用拖拽
+            // 拖拽核心逻辑 (绑在 ☰ 图标上，而非整行)
             const handle = li.querySelector('.ost-drag-handle');
             
             handle.addEventListener('pointerdown', (e) => {
@@ -350,6 +319,7 @@ jQuery(async function () {
             playlistContainer.appendChild(li);
         });
     }
+
 
     addBtn.addEventListener('click', () => {
         const inputVal = newLinkInput.value.trim();

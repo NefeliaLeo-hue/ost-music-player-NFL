@@ -280,20 +280,76 @@ jQuery(async function () {
         });
     }
 
-    playlistContainer.addEventListener('dragover', e => {
-        e.preventDefault();
-        const draggingItem = document.querySelector('.dragging');
-        if (!draggingItem) return;
+        function renderPlaylist() {
+        playlistContainer.innerHTML = '';
+        
+        tempPlaylist.forEach((link, index) => {
+            const li = document.createElement('li');
+            li.className = 'ost-playlist-item';
+            // 【关键1】移除 draggable，加入 touch-action: none 禁用移动端默认滚动
+            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; touch-action: none;";
+            
+            li.innerHTML = `
+                <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
+                <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
+                <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
+            `;
 
-        const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging)')];
-        let nextSibling = siblings.find(sibling => {
-            const rect = sibling.getBoundingClientRect();
-            const offset = e.clientY - rect.top - rect.height / 2;
-            return offset < 0; 
+            // 【事件绑定】删除单行
+            li.querySelector('.ost-delete-btn').addEventListener('click', () => {
+                tempPlaylist.splice(index, 1);
+                renderPlaylist();
+            });
+
+            // 【关键2】使用 Pointer Events 实现 PC/手机双端通用拖拽
+            const handle = li.querySelector('.ost-drag-handle');
+            
+            handle.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); 
+                handle.setPointerCapture(e.pointerId); // 锁定手指/鼠标焦点
+                
+                // 拖拽时的浮空视觉反馈
+                li.style.opacity = '0.5';
+                li.style.background = '#3f3f46';
+                li.classList.add('dragging-item');
+
+                // 移动手指/鼠标时的实时排序计算
+                const onPointerMove = (moveEvent) => {
+                    const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-item)')];
+                    
+                    let nextSibling = siblings.find(sibling => {
+                        const rect = sibling.getBoundingClientRect();
+                        return moveEvent.clientY < rect.top + rect.height / 2;
+                    });
+
+                    playlistContainer.insertBefore(li, nextSibling);
+                };
+
+                // 松开手指/鼠标：结束拖拽
+                const onPointerUp = (upEvent) => {
+                    handle.releasePointerCapture(upEvent.pointerId);
+                    li.style.opacity = '1';
+                    li.style.background = '#18181b';
+                    li.classList.remove('dragging-item');
+                    
+                    // 卸载临时监听器，节省内存
+                    handle.removeEventListener('pointermove', onPointerMove);
+                    handle.removeEventListener('pointerup', onPointerUp);
+                    handle.removeEventListener('pointercancel', onPointerUp);
+                    
+                    // 刷新同步当前 DOM 顺序到数组
+                    const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
+                    tempPlaylist = currentItems.map(item => item.getAttribute('title'));
+                };
+
+                handle.addEventListener('pointermove', onPointerMove);
+                handle.addEventListener('pointerup', onPointerUp);
+                handle.addEventListener('pointercancel', onPointerUp);
+            });
+
+            playlistContainer.appendChild(li);
         });
-
-        playlistContainer.insertBefore(draggingItem, nextSibling);
-    });
+    }
 
     addBtn.addEventListener('click', () => {
         const inputVal = newLinkInput.value.trim();

@@ -1,8 +1,26 @@
 <div class="ost-settings-wrapper" style="padding: 10px;">
     <h4>🎵 OST Music-player</h4>
-    <p style="font-size: 12px; color: #a1a1aa; margin-bottom: 10px;">在此粘贴你的 Catbox 音乐直链，一行一首：</p>
     
-    <textarea id="ost-links-input" class="text_pole" style="width: 100%; height: 120px; white-space: pre;" placeholder="https://files.catbox.moe/..."></textarea>
+    <!-- 1. 新增歌曲区 -->
+    <p style="font-size: 12px; color: #a1a1aa; margin-bottom: 5px;">添加新歌曲 (通过url)：</p>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <input type="text" id="ost-new-link" class="text_pole" style="flex: 1; padding: 5px;" placeholder="粘贴单行或多行链接...">
+        <div id="ost-add-btn" class="menu_button" style="width: auto; padding: 0 15px; display: flex; align-items: center;">➕ 添加</div>
+    </div>
+
+    <!-- 2. 排序工具栏 -->
+    <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+        <div class="menu_button ost-sort-btn" data-sort="az" title="按字母 A-Z 排序" style="flex:1; text-align:center; font-size:12px;">A-Z</div>
+        <div class="menu_button ost-sort-btn" data-sort="za" title="按字母 Z-A 排序" style="flex:1; text-align:center; font-size:12px;">Z-A</div>
+        <div class="menu_button ost-sort-btn" data-sort="reverse" title="列表倒序反转" style="flex:1; text-align:center; font-size:12px;">🔃反转</div>
+        <div class="menu_button ost-sort-btn" data-sort="random" title="随机打乱列表" style="flex:1; text-align:center; font-size:12px;">🔀打乱</div>
+    </div>
+
+    <!-- 3. 可拖拽列表容器 -->
+    <ul id="ost-playlist-container" style="list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
+        <!-- 列表项会由 JS 动态生成填充这里 -->
+    </ul>
     
-    <div id="ost-save-btn" class="menu_button" style="margin-top: 10px;">💾 保存并应用歌单</div>
+    <!-- 4. 保存按钮 -->
+    <div id="ost-save-btn" class="menu_button" style="margin-top: 15px; text-align: center;">💾 保存并应用歌单</div>
 </div>

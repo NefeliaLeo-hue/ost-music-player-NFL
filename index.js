@@ -247,42 +247,48 @@ jQuery(async function () {
     
     let tempPlaylist = [...playlist]; 
 
-        function renderPlaylist() {
+            function renderPlaylist() {
         playlistContainer.innerHTML = '';
         
         tempPlaylist.forEach((link, index) => {
             const li = document.createElement('li');
             li.className = 'ost-playlist-item';
             
-            // 【修复1】删掉这里的 touch-action: none，让整行文字区域可以正常上下滑动
-            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none;";
+            // 【动画强化】加入 transform 和 box-shadow 的动画过渡 (0.15s ease)，让抓取和放下显得非常 Q 弹
+            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;";
             
             li.innerHTML = `
-                <!-- 【修复2】只在汉堡图标 ☰ 上保留 touch-action: none，确保只有按住图标时才触发拖拽，不影响网页滚动 -->
                 <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
                 <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
                 <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
             `;
 
-            // 删除单行事件
             li.querySelector('.ost-delete-btn').addEventListener('click', () => {
                 tempPlaylist.splice(index, 1);
                 renderPlaylist();
             });
 
-            // 拖拽核心逻辑 (绑在 ☰ 图标上，而非整行)
             const handle = li.querySelector('.ost-drag-handle');
             
             handle.addEventListener('pointerdown', (e) => {
                 e.preventDefault(); 
-                handle.setPointerCapture(e.pointerId); // 锁定手指/鼠标焦点
+                handle.setPointerCapture(e.pointerId); 
                 
-                // 拖拽时的浮空视觉反馈
-                li.style.opacity = '0.5';
-                li.style.background = '#3f3f46';
+                // 【特效 1：触觉】如果手机系统支持，抓起时会触发 50 毫秒的短促马达震动
+                if (navigator.vibrate) navigator.vibrate(50);
+                
+                // 【特效 2：视觉】浮空效果：放大、加深阴影、改变背景色、并加上明显的紫色高光边框
+                li.style.opacity = '0.95';
+                li.style.background = '#27272a';
+                li.style.transform = 'scale(1.03)';
+                li.style.boxShadow = '0 12px 24px rgba(0,0,0,0.8)';
+                li.style.border = '1px solid #a855f7'; 
+                li.style.borderRadius = '8px';
+                li.style.position = 'relative'; // 确保悬浮时层级在其他列表项之上
+                li.style.zIndex = '999';
+                
                 li.classList.add('dragging-item');
 
-                // 移动手指/鼠标时的实时排序计算
                 const onPointerMove = (moveEvent) => {
                     const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-item)')];
                     
@@ -294,19 +300,28 @@ jQuery(async function () {
                     playlistContainer.insertBefore(li, nextSibling);
                 };
 
-                // 松开手指/鼠标：结束拖拽
                 const onPointerUp = (upEvent) => {
                     handle.releasePointerCapture(upEvent.pointerId);
+                    
+                    // 【特效 3：触觉】放下时再次触发极短的震动，确认操作完成
+                    if (navigator.vibrate) navigator.vibrate(30);
+
+                    // 【特效 4：恢复】清除所有临时高光和浮空样式，平滑落回原位
                     li.style.opacity = '1';
                     li.style.background = '#18181b';
+                    li.style.transform = 'scale(1)';
+                    li.style.boxShadow = 'none';
+                    li.style.border = 'none';
+                    li.style.borderBottom = '1px solid #27272a';
+                    li.style.borderRadius = '0';
+                    li.style.zIndex = '1';
+                    
                     li.classList.remove('dragging-item');
                     
-                    // 卸载临时监听器，节省内存
                     handle.removeEventListener('pointermove', onPointerMove);
                     handle.removeEventListener('pointerup', onPointerUp);
                     handle.removeEventListener('pointercancel', onPointerUp);
                     
-                    // 刷新同步当前 DOM 顺序到数组
                     const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
                     tempPlaylist = currentItems.map(item => item.getAttribute('title'));
                 };
@@ -319,6 +334,7 @@ jQuery(async function () {
             playlistContainer.appendChild(li);
         });
     }
+
 
 
     addBtn.addEventListener('click', () => {

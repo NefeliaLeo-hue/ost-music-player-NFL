@@ -9,7 +9,6 @@ if (typeof jQuery === "undefined") {
 jQuery(async function () {
     console.log("[OST Player] INIT START");
     
-    // 防止重复加载
     if ($("#ost-player-container").length) {
         console.log("[OST Player] Already loaded");
         return;
@@ -17,34 +16,20 @@ jQuery(async function () {
     console.log("[OST Player] Initialized");
 
     // =====================
-    // 数据读取
+    // 数据读取与初始化
     // =====================
     let savedLinks = localStorage.getItem("ost_custom_playlist");
     let playlist = savedLinks ? savedLinks.split("\n").filter(link => link.trim() !== "") : [];
     let currentIndex = Number(localStorage.getItem("ost_current_index")) || 0;
     
     let audio = new Audio(playlist.length ? playlist[currentIndex] : "");
-    
-    audio.addEventListener("loadedmetadata", () => {
-        console.log("歌曲长度:", audio.duration);
-    });
-    
-    audio.addEventListener("error", () => {
-        console.log("[OST Player] 音频错误:", audio.error);
-    });
-    
-    // 音量记忆
     audio.volume = Number(localStorage.getItem("ost_volume")) || 0.5;
-
-    // =====================
-    // 恢复播放状态
-    // =====================
     let wasPlaying = localStorage.getItem("ost_playing") === "true";
-    
-    audio.addEventListener("volumechange", () => {
-        localStorage.setItem("ost_volume", audio.volume);
-    });
-    
+
+    audio.addEventListener("loadedmetadata", () => console.log("歌曲长度:", audio.duration));
+    audio.addEventListener("error", () => console.log("[OST Player] 音频错误:", audio.error));
+    audio.addEventListener("volumechange", () => localStorage.setItem("ost_volume", audio.volume));
+
     // =====================
     // 注入 HTML (主悬浮窗 + 拖拽排序设置面板)
     // =====================
@@ -106,35 +91,25 @@ jQuery(async function () {
 
     playerDOM.addEventListener('pointerdown', (e) => {
         if (e.target.closest('button')) return;
-
         isDragging = true;
         isMoved = false; 
-        
         startX = e.clientX;
         startY = e.clientY;
-
         const rect = playerDOM.getBoundingClientRect();
         initialX = rect.left;
         initialY = rect.top;
-
         playerDOM.style.right = 'auto'; 
         playerDOM.style.left = initialX + 'px';
         playerDOM.style.top = initialY + 'px';
         playerDOM.style.transition = 'none'; 
-        
         playerDOM.setPointerCapture(e.pointerId);
     });
 
     playerDOM.addEventListener('pointermove', (e) => {
         if (!isDragging) return;
-        
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-            isMoved = true;
-        }
-
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isMoved = true;
         playerDOM.style.left = (initialX + dx) + 'px';
         playerDOM.style.top = (initialY + dy) + 'px';
     });
@@ -146,11 +121,9 @@ jQuery(async function () {
             playerDOM.releasePointerCapture(e.pointerId);
         }
     };
-
     playerDOM.addEventListener('pointerup', endDrag);
     playerDOM.addEventListener('pointercancel', endDrag);
 
-    // 缩放点击逻辑
     $('#ost-min-btn').on('click', function(e) {
         e.stopPropagation(); 
         $('#ost-player-container').addClass('minimized');
@@ -163,14 +136,10 @@ jQuery(async function () {
     });
 
     // =====================
-    // 播放卡死保护
+    // 播放逻辑
     // =====================
     let playTimer = null;
-
-    audio.addEventListener("playing", () => {
-        clearTimeout(playTimer);
-    });
-    
+    audio.addEventListener("playing", () => clearTimeout(playTimer));
     audio.addEventListener("waiting", () => {
         clearTimeout(playTimer);
         playTimer = setTimeout(() => {
@@ -189,7 +158,6 @@ jQuery(async function () {
     }
     updateTrackInfo();
 
-    // 播放按钮事件
     playBtn.on('click', function() {
         if (playlist.length === 0) {
             alert("请先点击 ⚙️ 齿轮按钮，输入音乐链接！");
@@ -200,7 +168,7 @@ jQuery(async function () {
             audio.play().then(() => {
                 localStorage.setItem("ost_playing", "true");
                 playBtn.text("⏸️");
-            }).catch((err) => {
+            }).catch(err => {
                 console.log("[OST Player] 播放失败:", err);
                 playBtn.text("▶️");
             });
@@ -211,7 +179,6 @@ jQuery(async function () {
         }
     });
 
-    // 下一曲按钮事件
     nextBtn.on('click', function() {
         if (playlist.length === 0) return;
         audio.pause();
@@ -223,31 +190,22 @@ jQuery(async function () {
         updateTrackInfo();
     });
 
-    audio.addEventListener('ended', function() { nextBtn.click(); });
+    audio.addEventListener('ended', () => nextBtn.click());
 
-    // 恢复初始播放状态
     if (wasPlaying && playlist.length > 0) {
-        audio.play().then(() => {
-            playBtn.text("⏸️");
-        }).catch(() => {
-            console.log("[OST Player] 自动播放被浏览器阻止");
-        });
+        audio.play().then(() => playBtn.text("⏸️")).catch(() => console.log("自动播放被拦截"));
     }
 
-    settingsBtn.on('click', function() {
-        settingsPanel.toggle();
-    });
+    settingsBtn.on('click', () => settingsPanel.toggle());
 
     // =====================
-    // 歌单列表与拖拽排序逻辑 (网易云级丝滑重构版 - 防误触 GPU 加速)
+    // 歌单列表与拖拽排序逻辑 (彻底解决手机端强制中断卡死 Bug 版)
     // =====================
     const playlistContainer = document.getElementById('ost-playlist-container');
     const newLinkInput = document.getElementById('ost-new-link');
     const addBtn = document.getElementById('ost-add-btn');
     
     let tempPlaylist = [...playlist]; 
-    
-    // 【核心修复】全局拖拽锁：防止双指同时按住导致的重影 Bug
     let isListDragging = false; 
 
     function renderPlaylist() {
@@ -256,7 +214,6 @@ jQuery(async function () {
         tempPlaylist.forEach((link, index) => {
             const li = document.createElement('li');
             li.className = 'ost-playlist-item';
-            
             li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; box-sizing: border-box;";
             
             li.innerHTML = `
@@ -274,20 +231,20 @@ jQuery(async function () {
             
             handle.addEventListener('pointerdown', (e) => {
                 if (isListDragging) return;
-                
                 e.preventDefault(); 
                 handle.setPointerCapture(e.pointerId); 
                 isListDragging = true; 
                 
                 if (navigator.vibrate) navigator.vibrate(50); 
 
-                // 清理可能残余的旧克隆体
-                document.querySelectorAll('.ost-drag-clone').forEach(el => el.remove());
+                // 清除意外残留
+                document.querySelectorAll('.ost-drag-clone, .ost-drag-placeholder').forEach(el => el.remove());
 
                 const rect = li.getBoundingClientRect();
+
+                // 1. 生成悬浮克隆体
                 const clone = li.cloneNode(true); 
                 clone.classList.add('ost-drag-clone');
-                
                 clone.style.position = 'fixed';
                 clone.style.top = rect.top + 'px';
                 clone.style.left = rect.left + 'px';
@@ -301,37 +258,45 @@ jQuery(async function () {
                 clone.style.borderRadius = '6px';
                 clone.style.opacity = '0.98';
                 clone.style.pointerEvents = 'none'; 
-                
-                // 开启 GPU 硬件加速
                 clone.style.transform = 'translate3d(0px, 0px, 0px) scale(1.02)';
                 clone.style.willChange = 'transform';
-                
                 document.body.appendChild(clone); 
+
+                // 2. 生成紫色的“虚假占位槽”去挤占位置
+                const placeholder = document.createElement('li');
+                placeholder.className = 'ost-playlist-item ost-drag-placeholder';
+                placeholder.style.cssText = li.style.cssText;
+                placeholder.style.background = 'rgba(168, 85, 247, 0.1)';
+                placeholder.innerHTML = li.innerHTML;
+                [...placeholder.children].forEach(child => child.style.opacity = '0'); // 隐藏槽内文字
+                li.parentNode.insertBefore(placeholder, li.nextSibling);
+
+                // 3. 将原实体“原地隐藏”（绝对不破坏 DOM 节点，防止手机断开手指连接）
+                const originalCssText = li.style.cssText; 
+                li.style.opacity = '0';
+                li.style.height = '0px';
+                li.style.padding = '0px';
+                li.style.border = 'none';
+                li.style.overflow = 'hidden';
+                li.style.pointerEvents = 'none';
 
                 const listStartX = e.clientX;
                 const listStartY = e.clientY;
-
-                const originalOpacities = [];
-                [...li.children].forEach(child => {
-                    originalOpacities.push(child.style.opacity);
-                    child.style.opacity = '0'; 
-                });
-                li.style.background = 'rgba(168, 85, 247, 0.1)'; 
-                li.classList.add('dragging-placeholder');
 
                 const onPointerMove = (moveEvent) => {
                     const dx = moveEvent.clientX - listStartX;
                     const dy = moveEvent.clientY - listStartY;
                     clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.02)`;
 
-                    const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-placeholder)')];
+                    // 移动虚假占位槽，而不是真身
+                    const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.ost-drag-placeholder)')].filter(el => el !== li);
                     let nextSibling = siblings.find(sibling => {
                         const sRect = sibling.getBoundingClientRect();
                         return moveEvent.clientY < sRect.top + sRect.height / 2;
                     });
 
-                    if (nextSibling !== li.nextElementSibling) {
-                        playlistContainer.insertBefore(li, nextSibling);
+                    if (nextSibling !== placeholder.nextElementSibling) {
+                        playlistContainer.insertBefore(placeholder, nextSibling);
                     }
                 };
 
@@ -340,15 +305,15 @@ jQuery(async function () {
                     isListDragging = false; 
                     
                     if (navigator.vibrate) navigator.vibrate(30); 
-
                     clone.remove(); 
 
-                    [...li.children].forEach((child, i) => {
-                        child.style.opacity = originalOpacities[i] || '1';
-                    });
-                    li.style.background = '#18181b';
-                    li.classList.remove('dragging-placeholder');
-                    
+                    // 4. 将真身瞬间插入到占位槽的最终位置，然后毁掉占位槽
+                    playlistContainer.insertBefore(li, placeholder);
+                    placeholder.remove();
+
+                    // 5. 解除隐身
+                    li.style.cssText = originalCssText;
+
                     handle.removeEventListener('pointermove', onPointerMove);
                     handle.removeEventListener('pointerup', cleanupDrag);
                     handle.removeEventListener('pointercancel', cleanupDrag);
@@ -365,7 +330,7 @@ jQuery(async function () {
             playlistContainer.appendChild(li);
         });
     }
-    
+
     addBtn.addEventListener('click', () => {
         const inputVal = newLinkInput.value.trim();
         if (inputVal) {

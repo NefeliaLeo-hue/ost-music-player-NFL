@@ -97,7 +97,7 @@ jQuery(async function () {
     const trackNum = $('#ost-track-num');
 
     // =====================
-    // 拖拽与最小化逻辑 (PC + 移动端全兼容)
+    // 拖拽与最小化逻辑 (主悬浮窗)
     // =====================
     const playerDOM = document.getElementById('ost-player-container');
     let isDragging = false;
@@ -239,87 +239,15 @@ jQuery(async function () {
     });
 
     // =====================
-    // 歌单列表与拖拽排序逻辑
+    // 歌单列表与拖拽排序逻辑 (网易云级丝滑重构版 - 防误触 GPU 加速)
     // =====================
     const playlistContainer = document.getElementById('ost-playlist-container');
     const newLinkInput = document.getElementById('ost-new-link');
     const addBtn = document.getElementById('ost-add-btn');
     
     let tempPlaylist = [...playlist]; 
-
-                function renderPlaylist() {
-        playlistContainer.innerHTML = '';
-        
-        tempPlaylist.forEach((link, index) => {
-            const li = document.createElement('li');
-            li.className = 'ost-playlist-item';
-            
-            // 基础样式：加入 box-sizing 保证边框和内边距无论怎么变，高度都锁死，绝对不发生跳闪抖动
-            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; box-sizing: border-box;";
-            
-            li.innerHTML = `
-                <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
-                <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
-                <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
-            `;
-
-            // 删除事件
-            li.querySelector('.ost-delete-btn').addEventListener('click', () => {
-                tempPlaylist.splice(index, 1);
-                renderPlaylist();
-            });
-
-            // 拖拽核心算法 (克隆跟随 + 占位槽模式)
-            const handle = li.querySelector('.ost-drag-handle');
-            
-            handle.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); 
-                handle.setPointerCapture(e.pointerId); 
-                
-                if (navigator.vibrate) navigator.vibrate(50); // 触觉：抓起震动
-
-                // --- 1. 创建悬浮跟随的克隆体 (视觉层) ---
-                const rect = li.getBoundingClientRect();
-                const clone = li.cloneNode(true); // 完美复刻当前行
-                
-                // 给克隆体加上绝对悬浮特效（脱离列表，跟随手指，带阴影和高光）
-                clone.style.position = 'fixed';
-                clone.style.top = rect.top + 'px';
-                clone.style.left = rect.left + 'px';
-                clone.style.width = rect.width + 'px';
-                clone.style.height = rect.height + 'px';
-                clone.style.margin = '0';
-                clone.style.zIndex = '999999'; // 保证盖住页面所有东西
-                clone.style.background = '#27272a';
-                clone.style.transform = 'scale(1.02)';
-                clone.style.boxShadow = '0 12px 24px rgba(0,0,0,0.8)';
-                clone.style.border = '1px solid #a855f7'; 
-                clone.style.borderRadius = '6px';
-                clone.style.opacity = '0.98';
-                clone.style.pointerEvents = 'none'; // 关键：让鼠标/手指穿透克隆体，保证底层列表能收到移动信号
-                
-                document.body.appendChild(clone); // 扔到页面最顶层
-
-                // 计算手指按下的位置距离元素边缘的偏差，保证拖拽瞬间克隆体不会产生瞬移
-                const offsetY = e.clientY - rect.top;
-                const offsetX = e.clientX - rect.left;
-
-                // --- 2. 原元素变异为“放置槽” (逻辑层) ---
-                const originalOpacities = [];
-                [...li.children].forEach(child => {
-                    originalOpacities.push(child.style.opacity);
-                    child.style.opacity = '0'; // 隐身里面的文字和按钮
-                });
-                // 背景变成淡淡的紫色，提示用户“松手就会掉进这里”
-                li.style.background = 'rgba(168, 85, 247, 0.1)'; 
-                li.classList.add('dragging-placeholder');
-
-                // --- 3. 拖拽移动过程 ---
-                const onPointerMove = (moveEvent) => {
-                    // 让克隆体在 X 和 Y 轴上完美黏住手指
-    let tempPlaylist = [...playlist]; 
     
-    // 【核心修复 1】添加一个全局锁，强制规定：同一时间全宇宙只能有一个元素被拖拽！
+    // 【核心修复】全局拖拽锁：防止双指同时按住导致的重影 Bug
     let isListDragging = false; 
 
     function renderPlaylist() {
@@ -345,21 +273,20 @@ jQuery(async function () {
             const handle = li.querySelector('.ost-drag-handle');
             
             handle.addEventListener('pointerdown', (e) => {
-                // 【核心修复 1】如果已经有东西在拖了，直接无视新的手指点击，绝对防误触
                 if (isListDragging) return;
                 
                 e.preventDefault(); 
                 handle.setPointerCapture(e.pointerId); 
-                isListDragging = true; // 上锁
+                isListDragging = true; 
                 
                 if (navigator.vibrate) navigator.vibrate(50); 
 
-                // 【核心修复 2】保险机制：每次抓起新东西前，强行清除页面上可能卡死的旧替身
+                // 清理可能残余的旧克隆体
                 document.querySelectorAll('.ost-drag-clone').forEach(el => el.remove());
 
                 const rect = li.getBoundingClientRect();
                 const clone = li.cloneNode(true); 
-                clone.classList.add('ost-drag-clone'); // 贴上标签方便回收
+                clone.classList.add('ost-drag-clone');
                 
                 clone.style.position = 'fixed';
                 clone.style.top = rect.top + 'px';
@@ -375,15 +302,14 @@ jQuery(async function () {
                 clone.style.opacity = '0.98';
                 clone.style.pointerEvents = 'none'; 
                 
-                // 【核心修复 3】开启 GPU 硬件加速，替身的初始位置由 top/left 定死，后续位移全靠 transform，彻底解决移动端卡顿
+                // 开启 GPU 硬件加速
                 clone.style.transform = 'translate3d(0px, 0px, 0px) scale(1.02)';
                 clone.style.willChange = 'transform';
                 
                 document.body.appendChild(clone); 
 
-                // 记录手指按下的初始坐标
-                const startX = e.clientX;
-                const startY = e.clientY;
+                const listStartX = e.clientX;
+                const listStartY = e.clientY;
 
                 const originalOpacities = [];
                 [...li.children].forEach(child => {
@@ -394,9 +320,8 @@ jQuery(async function () {
                 li.classList.add('dragging-placeholder');
 
                 const onPointerMove = (moveEvent) => {
-                    // 只计算相对位移，交给 GPU 渲染，丝滑无比
-                    const dx = moveEvent.clientX - startX;
-                    const dy = moveEvent.clientY - startY;
+                    const dx = moveEvent.clientX - listStartX;
+                    const dy = moveEvent.clientY - listStartY;
                     clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.02)`;
 
                     const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-placeholder)')];
@@ -410,14 +335,13 @@ jQuery(async function () {
                     }
                 };
 
-                // 【核心修复 2】写一个统一的“彻底清场”函数，无论手指正常松开还是被系统强行打断，都调用它
                 const cleanupDrag = (upEvent) => {
                     handle.releasePointerCapture(upEvent.pointerId);
-                    isListDragging = false; // 解锁
+                    isListDragging = false; 
                     
                     if (navigator.vibrate) navigator.vibrate(30); 
 
-                    clone.remove(); // 销毁替身
+                    clone.remove(); 
 
                     [...li.children].forEach((child, i) => {
                         child.style.opacity = originalOpacities[i] || '1';
@@ -425,7 +349,6 @@ jQuery(async function () {
                     li.style.background = '#18181b';
                     li.classList.remove('dragging-placeholder');
                     
-                    // 卸载所有监听器
                     handle.removeEventListener('pointermove', onPointerMove);
                     handle.removeEventListener('pointerup', cleanupDrag);
                     handle.removeEventListener('pointercancel', cleanupDrag);
@@ -436,15 +359,13 @@ jQuery(async function () {
 
                 handle.addEventListener('pointermove', onPointerMove);
                 handle.addEventListener('pointerup', cleanupDrag);
-                handle.addEventListener('pointercancel', cleanupDrag); // 防止系统强制打断造成卡死
+                handle.addEventListener('pointercancel', cleanupDrag);
             });
 
             playlistContainer.appendChild(li);
         });
     }
-        
-
-
+    
     addBtn.addEventListener('click', () => {
         const inputVal = newLinkInput.value.trim();
         if (inputVal) {

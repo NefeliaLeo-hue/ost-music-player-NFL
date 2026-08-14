@@ -317,57 +317,132 @@ jQuery(async function () {
                 // --- 3. 拖拽移动过程 ---
                 const onPointerMove = (moveEvent) => {
                     // 让克隆体在 X 和 Y 轴上完美黏住手指
-                    clone.style.top = (moveEvent.clientY - offsetY) + 'px';
-                    clone.style.left = (moveEvent.clientX - offsetX) + 'px';
+    let tempPlaylist = [...playlist]; 
+    
+    // 【核心修复 1】添加一个全局锁，强制规定：同一时间全宇宙只能有一个元素被拖拽！
+    let isListDragging = false; 
 
-                    // 扫描手指当前的 Y 轴坐标，判断它越过了哪一行的中线
+    function renderPlaylist() {
+        playlistContainer.innerHTML = '';
+        
+        tempPlaylist.forEach((link, index) => {
+            const li = document.createElement('li');
+            li.className = 'ost-playlist-item';
+            
+            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; box-sizing: border-box;";
+            
+            li.innerHTML = `
+                <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
+                <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
+                <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
+            `;
+
+            li.querySelector('.ost-delete-btn').addEventListener('click', () => {
+                tempPlaylist.splice(index, 1);
+                renderPlaylist();
+            });
+
+            const handle = li.querySelector('.ost-drag-handle');
+            
+            handle.addEventListener('pointerdown', (e) => {
+                // 【核心修复 1】如果已经有东西在拖了，直接无视新的手指点击，绝对防误触
+                if (isListDragging) return;
+                
+                e.preventDefault(); 
+                handle.setPointerCapture(e.pointerId); 
+                isListDragging = true; // 上锁
+                
+                if (navigator.vibrate) navigator.vibrate(50); 
+
+                // 【核心修复 2】保险机制：每次抓起新东西前，强行清除页面上可能卡死的旧替身
+                document.querySelectorAll('.ost-drag-clone').forEach(el => el.remove());
+
+                const rect = li.getBoundingClientRect();
+                const clone = li.cloneNode(true); 
+                clone.classList.add('ost-drag-clone'); // 贴上标签方便回收
+                
+                clone.style.position = 'fixed';
+                clone.style.top = rect.top + 'px';
+                clone.style.left = rect.left + 'px';
+                clone.style.width = rect.width + 'px';
+                clone.style.height = rect.height + 'px';
+                clone.style.margin = '0';
+                clone.style.zIndex = '999999'; 
+                clone.style.background = '#27272a';
+                clone.style.boxShadow = '0 12px 24px rgba(0,0,0,0.8)';
+                clone.style.border = '1px solid #a855f7'; 
+                clone.style.borderRadius = '6px';
+                clone.style.opacity = '0.98';
+                clone.style.pointerEvents = 'none'; 
+                
+                // 【核心修复 3】开启 GPU 硬件加速，替身的初始位置由 top/left 定死，后续位移全靠 transform，彻底解决移动端卡顿
+                clone.style.transform = 'translate3d(0px, 0px, 0px) scale(1.02)';
+                clone.style.willChange = 'transform';
+                
+                document.body.appendChild(clone); 
+
+                // 记录手指按下的初始坐标
+                const startX = e.clientX;
+                const startY = e.clientY;
+
+                const originalOpacities = [];
+                [...li.children].forEach(child => {
+                    originalOpacities.push(child.style.opacity);
+                    child.style.opacity = '0'; 
+                });
+                li.style.background = 'rgba(168, 85, 247, 0.1)'; 
+                li.classList.add('dragging-placeholder');
+
+                const onPointerMove = (moveEvent) => {
+                    // 只计算相对位移，交给 GPU 渲染，丝滑无比
+                    const dx = moveEvent.clientX - startX;
+                    const dy = moveEvent.clientY - startY;
+                    clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.02)`;
+
                     const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-placeholder)')];
-                    
                     let nextSibling = siblings.find(sibling => {
                         const sRect = sibling.getBoundingClientRect();
                         return moveEvent.clientY < sRect.top + sRect.height / 2;
                     });
 
-                    // 移动底层的放置槽，其他列表行会自动被挤开
                     if (nextSibling !== li.nextElementSibling) {
                         playlistContainer.insertBefore(li, nextSibling);
                     }
                 };
 
-                // --- 4. 松手释放 ---
-                const onPointerUp = (upEvent) => {
+                // 【核心修复 2】写一个统一的“彻底清场”函数，无论手指正常松开还是被系统强行打断，都调用它
+                const cleanupDrag = (upEvent) => {
                     handle.releasePointerCapture(upEvent.pointerId);
+                    isListDragging = false; // 解锁
                     
-                    if (navigator.vibrate) navigator.vibrate(30); // 触觉：放下震动
+                    if (navigator.vibrate) navigator.vibrate(30); 
 
-                    // 销毁空中的替身
-                    clone.remove();
+                    clone.remove(); // 销毁替身
 
-                    // 放置槽还原为真实模样
                     [...li.children].forEach((child, i) => {
                         child.style.opacity = originalOpacities[i] || '1';
                     });
                     li.style.background = '#18181b';
                     li.classList.remove('dragging-placeholder');
                     
-                    // 卸载临时监听器，避免内存泄漏
+                    // 卸载所有监听器
                     handle.removeEventListener('pointermove', onPointerMove);
-                    handle.removeEventListener('pointerup', onPointerUp);
-                    handle.removeEventListener('pointercancel', onPointerUp);
+                    handle.removeEventListener('pointerup', cleanupDrag);
+                    handle.removeEventListener('pointercancel', cleanupDrag);
                     
-                    // 重新扫描 DOM 并保存最终顺序
                     const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
                     tempPlaylist = currentItems.map(item => item.getAttribute('title'));
                 };
 
                 handle.addEventListener('pointermove', onPointerMove);
-                handle.addEventListener('pointerup', onPointerUp);
-                handle.addEventListener('pointercancel', onPointerUp);
+                handle.addEventListener('pointerup', cleanupDrag);
+                handle.addEventListener('pointercancel', cleanupDrag); // 防止系统强制打断造成卡死
             });
 
             playlistContainer.appendChild(li);
         });
-                }
+    }
+        
 
 
     addBtn.addEventListener('click', () => {

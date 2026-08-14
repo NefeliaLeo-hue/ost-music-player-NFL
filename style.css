@@ -1,8 +1,15 @@
+/* 主容器 */
 #ost-player-container {
+    /* 基础定位保持不变 */
     position: fixed;
     top: 65px;
     right: 20px;
+    z-index: 99999;
+    
+    /* 尺寸与外观 */
     width: 260px;
+    height: 60px; /* 【关键】强制固定高度 (40封面 + 10x2内边距 = 60)，防止纵向抖动 */
+    box-sizing: border-box; /* 确保 padding 算在宽高内 */
     background: rgba(24, 24, 27, 0.95);
     border: 1px solid #3f3f46;
     border-radius: 12px;
@@ -11,10 +18,59 @@
     align-items: center;
     gap: 12px;
     box-shadow: 0 8px 16px rgba(0,0,0,0.6);
-    z-index: 99999;
     backdrop-filter: blur(8px);
     font-family: system-ui, sans-serif;
     color: #e4e4e7;
+    
+    /* 交互属性 */
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    overflow: hidden; /* 【关键】缩小过程中直接裁切超出部分，绝不互相挤压 */
+    
+    /* 动画：加入一点带有物理回弹感的 cubic-bezier */
+    transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                border-radius 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 保证封面图标绝对不会被压缩变形 */
+.ost-cover {
+    flex-shrink: 0; /* 拒绝被 Flex 挤压 */
+    /* 其他你原有的 ost-cover 属性保持不变，比如 width/height: 40px 等 */
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 20px;
+    box-shadow: 0 0 10px rgba(168,85,247,0.4);
+}
+
+/* 内部信息和按钮组：添加透明度渐变 */
+.ost-info, .ost-controls {
+    opacity: 1;
+    white-space: nowrap; /* 【关键】防止文字在变窄时换行把容器撑破 */
+    transition: opacity 0.2s ease; 
+}
+.ost-info { flex: 1; display: flex; flex-direction: column; }
+
+/* === 最小化状态 === */
+#ost-player-container.minimized {
+    width: 60px; /* 和 height 一样大，变成完美正方形 */
+    border-radius: 30px; /* 圆角等于高度的一半，变成完美正圆 */
+    gap: 0;
+    cursor: pointer;
+}
+
+/* 最小化时：不要用 display:none，而是让它们透明并禁用点击 */
+#ost-player-container.minimized .ost-info,
+#ost-player-container.minimized .ost-controls {
+    opacity: 0;
+    pointer-events: none; 
+}
+
 
     
 cursor: grab;

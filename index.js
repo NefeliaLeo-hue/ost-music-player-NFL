@@ -187,7 +187,11 @@ console.log("[OST Player] INIT START");
     const endDrag = (e) => {
         if (isDragging) {
             isDragging = false;
-            playerDOM.style.transition = 'width 0.3s ease, height 0.3s ease, border-radius 0.3s ease, padding 0.3s ease';
+            playerDOM.style.transition = ''; 
+            
+            playerDOM.releasePointerCapture(e.pointerId);
+        }
+    };
             // 释放指针锁定
             playerDOM.releasePointerCapture(e.pointerId);
         }

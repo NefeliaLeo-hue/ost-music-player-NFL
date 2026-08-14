@@ -247,15 +247,15 @@ jQuery(async function () {
     
     let tempPlaylist = [...playlist]; 
 
-            function renderPlaylist() {
+                function renderPlaylist() {
         playlistContainer.innerHTML = '';
         
         tempPlaylist.forEach((link, index) => {
             const li = document.createElement('li');
             li.className = 'ost-playlist-item';
             
-            // 【动画强化】加入 transform 和 box-shadow 的动画过渡 (0.15s ease)，让抓取和放下显得非常 Q 弹
-            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;";
+            // 基础样式：加入 box-sizing 保证边框和内边距无论怎么变，高度都锁死，绝对不发生跳闪抖动
+            li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; box-sizing: border-box;";
             
             li.innerHTML = `
                 <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
@@ -263,78 +263,94 @@ jQuery(async function () {
                 <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
             `;
 
+            // 删除事件
             li.querySelector('.ost-delete-btn').addEventListener('click', () => {
                 tempPlaylist.splice(index, 1);
                 renderPlaylist();
             });
 
+            // 拖拽核心算法 (克隆跟随 + 占位槽模式)
             const handle = li.querySelector('.ost-drag-handle');
             
             handle.addEventListener('pointerdown', (e) => {
                 e.preventDefault(); 
                 handle.setPointerCapture(e.pointerId); 
                 
-                // 【特效 1：触觉】如果手机系统支持，抓起时会触发 50 毫秒的短促马达震动
-                if (navigator.vibrate) navigator.vibrate(50);
-                
-                // 【特效 2：视觉】浮空效果：放大、加深阴影、改变背景色、并加上明显的紫色高光边框
-                li.style.opacity = '0.95';
-                li.style.background = '#27272a';
-                li.style.transform = 'scale(1.03)';
-                li.style.boxShadow = '0 12px 24px rgba(0,0,0,0.8)';
-                li.style.border = '1px solid #a855f7'; 
-                li.style.borderRadius = '8px';
-                li.style.position = 'relative'; // 确保悬浮时层级在其他列表项之上
-                li.style.zIndex = '999';
-                
-                li.classList.add('dragging-item');
+                if (navigator.vibrate) navigator.vibrate(50); // 触觉：抓起震动
 
+                // --- 1. 创建悬浮跟随的克隆体 (视觉层) ---
+                const rect = li.getBoundingClientRect();
+                const clone = li.cloneNode(true); // 完美复刻当前行
+                
+                // 给克隆体加上绝对悬浮特效（脱离列表，跟随手指，带阴影和高光）
+                clone.style.position = 'fixed';
+                clone.style.top = rect.top + 'px';
+                clone.style.left = rect.left + 'px';
+                clone.style.width = rect.width + 'px';
+                clone.style.height = rect.height + 'px';
+                clone.style.margin = '0';
+                clone.style.zIndex = '999999'; // 保证盖住页面所有东西
+                clone.style.background = '#27272a';
+                clone.style.transform = 'scale(1.02)';
+                clone.style.boxShadow = '0 12px 24px rgba(0,0,0,0.8)';
+                clone.style.border = '1px solid #a855f7'; 
+                clone.style.borderRadius = '6px';
+                clone.style.opacity = '0.98';
+                clone.style.pointerEvents = 'none'; // 关键：让鼠标/手指穿透克隆体，保证底层列表能收到移动信号
+                
+                document.body.appendChild(clone); // 扔到页面最顶层
+
+                // 计算手指按下的位置距离元素边缘的偏差，保证拖拽瞬间克隆体不会产生瞬移
+                const offsetY = e.clientY - rect.top;
+                const offsetX = e.clientX - rect.left;
+
+                // --- 2. 原元素变异为“放置槽” (逻辑层) ---
+                const originalOpacities = [];
+                [...li.children].forEach(child => {
+                    originalOpacities.push(child.style.opacity);
+                    child.style.opacity = '0'; // 隐身里面的文字和按钮
+                });
+                // 背景变成淡淡的紫色，提示用户“松手就会掉进这里”
+                li.style.background = 'rgba(168, 85, 247, 0.1)'; 
+                li.classList.add('dragging-placeholder');
+
+                // --- 3. 拖拽移动过程 ---
                 const onPointerMove = (moveEvent) => {
-                    const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-item)')];
+                    // 让克隆体在 X 和 Y 轴上完美黏住手指
+                    clone.style.top = (moveEvent.clientY - offsetY) + 'px';
+                    clone.style.left = (moveEvent.clientX - offsetX) + 'px';
+
+                    // 扫描手指当前的 Y 轴坐标，判断它越过了哪一行的中线
+                    const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging-placeholder)')];
                     
                     let nextSibling = siblings.find(sibling => {
-                        const rect = sibling.getBoundingClientRect();
-                        return moveEvent.clientY < rect.top + rect.height / 2;
+                        const sRect = sibling.getBoundingClientRect();
+                        return moveEvent.clientY < sRect.top + sRect.height / 2;
                     });
 
-                    playlistContainer.insertBefore(li, nextSibling);
+                    // 移动底层的放置槽，其他列表行会自动被挤开
+                    if (nextSibling !== li.nextElementSibling) {
+                        playlistContainer.insertBefore(li, nextSibling);
+                    }
                 };
 
+                // --- 4. 松手释放 ---
                 const onPointerUp = (upEvent) => {
                     handle.releasePointerCapture(upEvent.pointerId);
                     
-                    // 【特效 3：触觉】放下时再次触发极短的震动，确认操作完成
-                    if (navigator.vibrate) navigator.vibrate(30);
+                    if (navigator.vibrate) navigator.vibrate(30); // 触觉：放下震动
 
-                    // 【特效 4：恢复】清除所有临时高光和浮空样式，平滑落回原位
-                    li.style.opacity = '1';
+                    // 销毁空中的替身
+                    clone.remove();
+
+                    // 放置槽还原为真实模样
+                    [...li.children].forEach((child, i) => {
+                        child.style.opacity = originalOpacities[i] || '1';
+                    });
                     li.style.background = '#18181b';
-                    li.style.transform = 'scale(1)';
-                    li.style.boxShadow = 'none';
-                    li.style.border = 'none';
-                    li.style.borderBottom = '1px solid #27272a';
-                    li.style.borderRadius = '0';
-                    li.style.zIndex = '1';
+                    li.classList.remove('dragging-placeholder');
                     
-                    li.classList.remove('dragging-item');
-                    
-                    handle.removeEventListener('pointermove', onPointerMove);
-                    handle.removeEventListener('pointerup', onPointerUp);
-                    handle.removeEventListener('pointercancel', onPointerUp);
-                    
-                    const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
-                    tempPlaylist = currentItems.map(item => item.getAttribute('title'));
-                };
-
-                handle.addEventListener('pointermove', onPointerMove);
-                handle.addEventListener('pointerup', onPointerUp);
-                handle.addEventListener('pointercancel', onPointerUp);
-            });
-
-            playlistContainer.appendChild(li);
-        });
-    }
-
+                    // 卸载临时监听
 
 
     addBtn.addEventListener('click', () => {

@@ -325,10 +325,126 @@ if(wasPlaying
         settingsPanel.toggle();
     });
 
-    saveBtn.on('click', function() {
-        const newLinks = linksInput.val();
-        localStorage.setItem('ost_custom_playlist', newLinks);
-        playlist = newLinks.split('\n').filter(link => link.trim() !== '');
+        // =====================
+    // 歌单列表与拖拽排序逻辑 (原生 HTML5 D&D)
+    // =====================
+
+    const playlistContainer = document.getElementById('ost-playlist-container');
+    const newLinkInput = document.getElementById('ost-new-link');
+    const addBtn = document.getElementById('ost-add-btn');
+    
+    // 初始化临时歌单数组
+    let tempPlaylist = [...playlist]; 
+
+    // 1. 动态渲染列表函数
+    function renderPlaylist() {
+        playlistContainer.innerHTML = ''; // 清空旧容器
+        
+        tempPlaylist.forEach((link, index) => {
+            const li = document.createElement('li');
+            li.className = 'ost-playlist-item';
+            li.draggable = true; // 开启原生拖拽
+            
+            li.innerHTML = `
+                <span class="ost-drag-handle" title="按住拖动">☰</span>
+                <span class="ost-item-text" title="${link}">${link}</span>
+                <span class="ost-delete-btn" title="删除">❌</span>
+            `;
+
+            // 【事件绑定】删除单行
+            li.querySelector('.ost-delete-btn').addEventListener('click', () => {
+                tempPlaylist.splice(index, 1);
+                renderPlaylist();
+            });
+
+            // 【事件绑定】开始拖拽
+            li.addEventListener('dragstart', () => {
+                li.classList.add('dragging');
+            });
+
+            // 【事件绑定】结束拖拽
+            li.addEventListener('dragend', () => {
+                li.classList.remove('dragging');
+                // 拖拽结束后，重新扫描 DOM，同步数据顺序
+                const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
+                tempPlaylist = currentItems.map(item => item.innerText);
+            });
+
+            playlistContainer.appendChild(li);
+        });
+    }
+
+    // 2. 拖拽碰撞检测 (物理引擎部分)
+    playlistContainer.addEventListener('dragover', e => {
+        e.preventDefault(); // 允许放置
+        const draggingItem = document.querySelector('.dragging');
+        if (!draggingItem) return;
+
+        // 获取所有不在拖拽状态的元素
+        const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.dragging)')];
+        
+        // 计算鼠标停在哪个元素的上半部
+        let nextSibling = siblings.find(sibling => {
+            const rect = sibling.getBoundingClientRect();
+            // rect.top 是元素顶部位置，rect.height / 2 是中心点
+            const offset = e.clientY - rect.top - rect.height / 2;
+            return offset < 0; 
+        });
+
+        // 插入到该元素前面
+        playlistContainer.insertBefore(draggingItem, nextSibling);
+    });
+
+    // 3. 添加新歌曲逻辑
+    addBtn.addEventListener('click', () => {
+        const inputVal = newLinkInput.value.trim();
+        if (inputVal) {
+            // 兼容同时粘贴多行链接，自动用换行符拆分成数组推入
+            const newLinks = inputVal.split('\n').map(l => l.trim()).filter(l => l !== '');
+            tempPlaylist.push(...newLinks);
+            newLinkInput.value = '';
+            renderPlaylist();
+        }
+    });
+
+    // 4. 四种排序逻辑
+    document.querySelectorAll('.ost-sort-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const type = e.target.dataset.sort;
+            if (type === 'az') tempPlaylist.sort();
+            if (type === 'za') tempPlaylist.sort().reverse();
+            if (type === 'reverse') tempPlaylist.reverse();
+            if (type === 'random') tempPlaylist.sort(() => Math.random() - 0.5);
+            renderPlaylist(); // 排序后重新渲染视图
+        });
+    });
+
+    // 5. 保存并应用逻辑
+    $('#ost-save-btn').on('click', function() {
+        // 将临时数组覆盖回主配置
+        playlist = [...tempPlaylist];
+        localStorage.setItem('ost_custom_playlist', playlist.join('\n'));
+        
+        if (playlist.length > 0) {
+            currentIndex = 0;
+            localStorage.setItem("ost_current_index", 0);
+            audio.src = playlist[currentIndex];
+            audio.pause();
+            playBtn.text('▶️');
+            updateTrackInfo();
+            // 如果面板是独立悬浮的，可以在这里加一句隐藏面板的代码，比如 settingsPanel.hide();
+            alert("✅ 歌单保存成功！");
+        } else {
+            audio.pause();
+            audio.src = "";
+            updateTrackInfo();
+        }
+    });
+
+    // 首次打开面板时执行一次渲染
+    renderPlaylist();
+
+    
         
         if (playlist.length > 0) {
             currentIndex = 0;

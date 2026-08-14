@@ -154,3 +154,62 @@ cursor: grab;
     box-shadow: none;
     cursor: pointer; /* 提示点击可以恢复 */
 }
+
+
+/* ====== 歌单列表样式 ====== */
+#ost-playlist-container {
+    scrollbar-width: thin;
+    scrollbar-color: #52525b #18181b;
+}
+
+.ost-playlist-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #27272a;
+    background: #18181b;
+    color: #a1a1aa;
+    font-size: 11px;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.ost-playlist-item:last-child { border-bottom: none; }
+.ost-playlist-item:hover { background: #27272a; }
+
+/* 拖拽手柄 */
+.ost-drag-handle {
+    cursor: grab;
+    padding-right: 10px;
+    color: #52525b;
+    font-size: 14px;
+    user-select: none;
+}
+.ost-drag-handle:active { cursor: grabbing; }
+
+/* 链接文本：从右向左溢出隐藏，方便看清 .mp3 等后缀 */
+.ost-item-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl; 
+    text-align: left;
+}
+
+/* 删除按钮 */
+.ost-delete-btn {
+    cursor: pointer;
+    color: #ef4444;
+    margin-left: 10px;
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+.ost-delete-btn:hover { background: rgba(239, 68, 68, 0.2); }
+
+/* 正在被鼠标提起来拖拽的行 */
+.ost-playlist-item.dragging {
+    opacity: 0.5;
+    background: #3f3f46;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+}
+

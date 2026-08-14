@@ -135,7 +135,7 @@ console.log("[OST Player] INIT START");
     const trackNum = $('#ost-track-num');
     
 
-    // =====================
+        // =====================
     // 拖拽与最小化逻辑 (PC + 移动端全兼容版)
     // =====================
     
@@ -187,7 +187,7 @@ console.log("[OST Player] INIT START");
     const endDrag = (e) => {
         if (isDragging) {
             isDragging = false;
-            playerDOM.style.transition = 'width 0.3s ease, height 0.3s ease, border-radius 0.3s ease, padding 0.3s ease';
+            playerDOM.style.transition = '';
             // 释放指针锁定
             playerDOM.releasePointerCapture(e.pointerId);
         }

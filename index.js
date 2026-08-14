@@ -350,7 +350,24 @@ jQuery(async function () {
                     li.style.background = '#18181b';
                     li.classList.remove('dragging-placeholder');
                     
-                    // 卸载临时监听
+                    // 卸载临时监听器，避免内存泄漏
+                    handle.removeEventListener('pointermove', onPointerMove);
+                    handle.removeEventListener('pointerup', onPointerUp);
+                    handle.removeEventListener('pointercancel', onPointerUp);
+                    
+                    // 重新扫描 DOM 并保存最终顺序
+                    const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
+                    tempPlaylist = currentItems.map(item => item.getAttribute('title'));
+                };
+
+                handle.addEventListener('pointermove', onPointerMove);
+                handle.addEventListener('pointerup', onPointerUp);
+                handle.addEventListener('pointercancel', onPointerUp);
+            });
+
+            playlistContainer.appendChild(li);
+        });
+                }
 
 
     addBtn.addEventListener('click', () => {

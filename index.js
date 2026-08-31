@@ -481,5 +481,3 @@ jQuery(async function () {
         }
     });
 });
-    renderPlaylist();
-});

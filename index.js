@@ -377,24 +377,114 @@ jQuery(async function () {
         });
     });
 
-    saveBtn.on('click', function() {
-        playlist = [...tempPlaylist];
-        localStorage.setItem('ost_custom_playlist', playlist.join('\n'));
-        
-        if (playlist.length > 0) {
-            currentIndex = 0;
-            localStorage.setItem("ost_current_index", 0);
-            audio.src = playlist[currentIndex];
-            audio.pause();
-            playBtn.text('▶️');
-            updateTrackInfo();
-            settingsPanel.hide();
-            alert("✅ 歌单保存成功！");
+    // =====================
+    // 新增：双模切换 (直链 / 线上外链) 核心逻辑
+    // =====================
+    let playerMode = localStorage.getItem("ost_player_mode") || "direct";
+    let savedIframe = localStorage.getItem("ost_iframe_code") || "";
+    
+    const modeDirectBtn = $('#ost-mode-direct');
+    const modeIframeBtn = $('#ost-mode-iframe');
+    const directUI = $('#ost-direct-ui');
+    const iframeUI = $('#ost-iframe-ui');
+    const iframeInput = $('#ost-iframe-input');
+
+    // 不改动原有 HTML，用 JS 动态在悬浮窗内部插入一个外链专属容器
+    $('.ost-info').after('<div id="ost-iframe-wrapper" style="display:none; flex:1; overflow:hidden; border-radius: 6px;"></div>');
+    const iframeWrapper = $('#ost-iframe-wrapper');
+
+    if (savedIframe) iframeInput.val(savedIframe);
+
+    // 切换到直链模式的面板 UI
+    function switchToDirectUI() {
+        modeDirectBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
+        modeIframeBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
+        directUI.show();
+        iframeUI.hide();
+        playerMode = "direct";
+    }
+
+    // 切换到外链模式的面板 UI
+    function switchToIframeUI() {
+        modeIframeBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
+        modeDirectBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
+        iframeUI.show();
+        directUI.hide();
+        playerMode = "iframe";
+    }
+
+    modeDirectBtn.on('click', switchToDirectUI);
+    modeIframeBtn.on('click', switchToIframeUI);
+
+    // 面板初次加载时显示上次选中的形态
+    if (playerMode === "iframe") {
+        switchToIframeUI();
+    } else {
+        switchToDirectUI();
+    }
+
+    // 渲染主悬浮窗最终形态 (双面间谍切换术)
+    function applyPlayerMode() {
+        if (playerMode === "iframe" && savedIframe.trim() !== "") {
+            // 1. 强制暂停直链音乐（不能让两首歌同时唱）
+            if (!audio.paused) {
+                audio.pause();
+                localStorage.setItem("ost_playing", "false");
+                $('#ost-play-btn').text("▶️");
+            }
+            // 2. 隐藏左侧封面、歌名和基础控制键 (保留齿轮和最小化)
+            $('.ost-cover, .ost-info, #ost-play-btn, #ost-next-btn, #ost-loop-btn').hide();
+            
+            // 3. 注入外链代码，并强行修正尺寸适配咱们 40px 的内容高度
+            iframeWrapper.html(savedIframe).show();
+            iframeWrapper.find('iframe').css({
+                'width': '100%',
+                'height': '40px',
+                'border-radius': '6px'
+            });
         } else {
-            audio.pause();
-            audio.src = "";
-            updateTrackInfo();
+            // 恢复直链形态：清空外链，显示咱们的专属 UI
+            iframeWrapper.hide().empty();
+            $('.ost-cover, .ost-info, #ost-play-btn, #ost-next-btn, #ost-loop-btn').show();
+        }
+    }
+
+    // 页面刷新时应用状态
+    applyPlayerMode();
+
+    // =====================
+    // 兼容双模的保存事件 (替换掉旧版的 saveBtn 点击事件)
+    // =====================
+    saveBtn.off('click').on('click', function() {
+        localStorage.setItem("ost_player_mode", playerMode);
+        
+        if (playerMode === "iframe") {
+            // 保存并应用外链
+            savedIframe = iframeInput.val().trim();
+            localStorage.setItem("ost_iframe_code", savedIframe);
+            applyPlayerMode();
             settingsPanel.hide();
+            alert("✅ 线上外链应用成功！");
+        } else {
+            // 保存并应用直链歌单 
+            playlist = [...tempPlaylist];
+            localStorage.setItem('ost_custom_playlist', playlist.join('\n'));
+            
+            if (playlist.length > 0) {
+                currentIndex = 0;
+                localStorage.setItem("ost_current_index", 0);
+                audio.src = playlist[currentIndex];
+                audio.pause();
+                $('#ost-play-btn').text('▶️');
+                updateTrackInfo();
+            } else {
+                audio.pause();
+                audio.src = "";
+                updateTrackInfo();
+            }
+            applyPlayerMode();
+            settingsPanel.hide();
+            alert("✅ 直链歌单保存成功！");
         }
     });
 

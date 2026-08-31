@@ -7,7 +7,7 @@
     z-index: 99999;
     
     /* 尺寸与外观 */
-    width: 260px;
+    width: 310px;
     height: 60px; /* 【关键】强制固定高度 (40封面 + 10x2内边距 = 60)，防止纵向抖动 */
     box-sizing: border-box; /* 确保 padding 算在宽高内 */
     background: rgba(24, 24, 27, 0.95);
@@ -36,7 +36,7 @@
 /* 保证封面图标绝对不会被压缩变形 */
 .ost-cover {
     flex-shrink: 0; /* 拒绝被 Flex 挤压 */
-    /* 其他你原有的 ost-cover 属性保持不变，比如 width/height: 40px 等 */
+    
     width: 40px;
     height: 40px;
     background: linear-gradient(135deg, #a855f7, #6366f1);
@@ -114,7 +114,7 @@ cursor: grab;
 }
 .ost-controls {
     display: flex;
-    gap: 8px;
+    gap: 4px;
 }
 .ost-btn {
     background: none;

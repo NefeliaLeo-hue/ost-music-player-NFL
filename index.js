@@ -92,7 +92,7 @@ jQuery(async function () {
     
     $('body').append(playerHTML);
 
-    // 【防弹修复】绝对作用域锁定：只在悬浮窗内部查找元素，无视任何外部 ID 冲突
+    // 绝对作用域锁定
     const playerContainer = $('#ost-player-container');
     const settingsPanel = $('#ost-floating-settings');
 
@@ -369,16 +369,16 @@ jQuery(async function () {
         }
     });
 
-    settingsPanel.find('.ost-sort-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const type = e.target.dataset.sort;
-            if (type === 'az') tempPlaylist.sort();
-            if (type === 'za') tempPlaylist.sort().reverse();
-            if (type === 'reverse') tempPlaylist.reverse();
-            if (type === 'random') tempPlaylist.sort(() => Math.random() - 0.5);
-            renderPlaylist();
-        });
+    // 【致命修复处】已修正为标准的 jQuery onClick 绑定，绝不报错
+    settingsPanel.find('.ost-sort-btn').on('click', function() {
+        const type = $(this).data('sort');
+        if (type === 'az') tempPlaylist.sort();
+        if (type === 'za') tempPlaylist.sort().reverse();
+        if (type === 'reverse') tempPlaylist.reverse();
+        if (type === 'random') tempPlaylist.sort(() => Math.random() - 0.5);
+        renderPlaylist();
     });
+
     renderPlaylist();
 
     // =====================
@@ -442,7 +442,6 @@ jQuery(async function () {
         } else {
             iframeWrapper.hide().empty();
             playerContainer.find('#ost-play-btn, #ost-next-btn, #ost-loop-btn').show();
-            // 【防弹修复】手动恢复 flex，防止被 jQuery 变成 block 导致排版崩溃
             playerContainer.find('.ost-cover').css('display', 'flex');
             playerContainer.find('.ost-info').css('display', 'flex');
         }

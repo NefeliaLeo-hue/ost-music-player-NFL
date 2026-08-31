@@ -53,7 +53,7 @@ jQuery(async function () {
     <div id="ost-floating-settings" style="display:none; position:fixed; top:80px; right:20px; width:280px; background:rgba(24,24,27,0.95); border:1px solid #3f3f46; border-radius:12px; padding:15px; box-shadow:0 8px 16px rgba(0,0,0,0.8); z-index:999999; backdrop-filter:blur(8px); font-family:system-ui, sans-serif; box-sizing:border-box;">
         <div style="font-size:13px; color:#e4e4e7; font-weight:bold; margin-bottom:12px;">🎵 播放列表设置</div>
         
-        <!-- 【新增】模式切换开关 -->
+        <!-- 模式切换开关 -->
         <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid #3f3f46; padding-bottom: 10px;">
             <div id="ost-mode-direct" style="flex: 1; text-align: center; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🔗 直链歌单</div>
             <div id="ost-mode-iframe" style="flex: 1; text-align: center; opacity: 0.5; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🌐 线上外链</div>
@@ -92,24 +92,32 @@ jQuery(async function () {
     
     $('body').append(playerHTML);
 
-    const playBtn = $('#ost-play-btn');
-    const nextBtn = $('#ost-next-btn');
-    const loopBtn = $('#ost-loop-btn'); 
-    const settingsBtn = $('#ost-settings-btn');
+    // 【防弹修复】绝对作用域锁定：只在悬浮窗内部查找元素，无视任何外部 ID 冲突
+    const playerContainer = $('#ost-player-container');
     const settingsPanel = $('#ost-floating-settings');
-    const saveBtn = $('#ost-save-btn');
-    const trackNum = $('#ost-track-num');
+
+    const playBtn = playerContainer.find('#ost-play-btn');
+    const nextBtn = playerContainer.find('#ost-next-btn');
+    const loopBtn = playerContainer.find('#ost-loop-btn'); 
+    const settingsBtn = playerContainer.find('#ost-settings-btn');
+    const minBtn = playerContainer.find('#ost-min-btn');
+    const trackNum = playerContainer.find('#ost-track-num');
+
+    const saveBtn = settingsPanel.find('#ost-save-btn');
+    const newLinkInput = settingsPanel.find('#ost-new-link')[0];
+    const addBtn = settingsPanel.find('#ost-add-btn')[0];
+    const playlistContainer = settingsPanel.find('#ost-playlist-container')[0];
 
     // =====================
     // 拖拽与最小化逻辑 (主悬浮窗)
     // =====================
-    const playerDOM = document.getElementById('ost-player-container');
+    const playerDOM = playerContainer[0];
     let isDragging = false;
     let isMoved = false; 
     let startX, startY, initialX, initialY;
 
     playerDOM.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button, iframe')) return; // 防误触，加入 iframe 排除
+        if (e.target.closest('button, iframe')) return; 
         isDragging = true;
         isMoved = false; 
         startX = e.clientX;
@@ -143,12 +151,12 @@ jQuery(async function () {
     playerDOM.addEventListener('pointerup', endDrag);
     playerDOM.addEventListener('pointercancel', endDrag);
 
-    $('#ost-min-btn').on('click', function(e) {
+    minBtn.on('click', function(e) {
         e.stopPropagation(); 
-        $('#ost-player-container').addClass('minimized');
+        playerContainer.addClass('minimized');
     });
 
-    $('#ost-player-container').on('click', function(e) {
+    playerContainer.on('click', function(e) {
         if ($(this).hasClass('minimized') && !isMoved) {
             $(this).removeClass('minimized');
         }
@@ -239,10 +247,6 @@ jQuery(async function () {
     // =====================
     // 直链歌单排序与拖拽逻辑
     // =====================
-    const playlistContainer = document.getElementById('ost-playlist-container');
-    const newLinkInput = document.getElementById('ost-new-link');
-    const addBtn = document.getElementById('ost-add-btn');
-    
     let tempPlaylist = [...playlist]; 
     let isListDragging = false; 
 
@@ -365,7 +369,7 @@ jQuery(async function () {
         }
     });
 
-    document.querySelectorAll('.ost-sort-btn').forEach(btn => {
+    settingsPanel.find('.ost-sort-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const type = e.target.dataset.sort;
             if (type === 'az') tempPlaylist.sort();
@@ -383,15 +387,14 @@ jQuery(async function () {
     let playerMode = localStorage.getItem("ost_player_mode") || "direct";
     let savedIframe = localStorage.getItem("ost_iframe_code") || "";
     
-    const modeDirectBtn = $('#ost-mode-direct');
-    const modeIframeBtn = $('#ost-mode-iframe');
-    const directUI = $('#ost-direct-ui');
-    const iframeUI = $('#ost-iframe-ui');
-    const iframeInput = $('#ost-iframe-input');
+    const modeDirectBtn = settingsPanel.find('#ost-mode-direct');
+    const modeIframeBtn = settingsPanel.find('#ost-mode-iframe');
+    const directUI = settingsPanel.find('#ost-direct-ui');
+    const iframeUI = settingsPanel.find('#ost-iframe-ui');
+    const iframeInput = settingsPanel.find('#ost-iframe-input');
 
-    // 动态注入外链容器
-    $('.ost-info').after('<div id="ost-iframe-wrapper" style="display:none; flex:1; overflow:hidden; border-radius: 6px; pointer-events: auto;"></div>');
-    const iframeWrapper = $('#ost-iframe-wrapper');
+    playerContainer.find('.ost-info').after('<div id="ost-iframe-wrapper" style="display:none; flex:1; overflow:hidden; border-radius: 6px; pointer-events: auto;"></div>');
+    const iframeWrapper = playerContainer.find('#ost-iframe-wrapper');
 
     if (savedIframe) iframeInput.val(savedIframe);
 
@@ -422,35 +425,31 @@ jQuery(async function () {
 
     function applyPlayerMode() {
         if (playerMode === "iframe" && savedIframe.trim() !== "") {
-            // 暂停本地音乐
             if (!audio.paused) {
                 audio.pause();
                 localStorage.setItem("ost_playing", "false");
                 playBtn.text("▶️");
             }
-            // 隐藏本地UI组件
-            $('.ost-cover, .ost-info, #ost-play-btn, #ost-next-btn, #ost-loop-btn').hide();
+            playerContainer.find('.ost-cover, .ost-info, #ost-play-btn, #ost-next-btn, #ost-loop-btn').hide();
             
-            // 注入 iframe
-            iframeWrapper.html(savedIframe).show();
+            iframeWrapper.html(savedIframe).css('display', 'block');
             iframeWrapper.find('iframe').css({
                 'width': '100%',
                 'height': '40px',
                 'border-radius': '6px',
-                'pointer-events': 'auto' // 确保 iframe 内可以点击
+                'pointer-events': 'auto' 
             });
         } else {
-            // 恢复本地 UI
             iframeWrapper.hide().empty();
-            $('.ost-cover, .ost-info, #ost-play-btn, #ost-next-btn, #ost-loop-btn').show();
+            playerContainer.find('#ost-play-btn, #ost-next-btn, #ost-loop-btn').show();
+            // 【防弹修复】手动恢复 flex，防止被 jQuery 变成 block 导致排版崩溃
+            playerContainer.find('.ost-cover').css('display', 'flex');
+            playerContainer.find('.ost-info').css('display', 'flex');
         }
     }
 
     applyPlayerMode();
 
-    // =====================
-    // 兼容双模的最终保存事件
-    // =====================
     saveBtn.off('click').on('click', function() {
         localStorage.setItem("ost_player_mode", playerMode);
         
@@ -481,8 +480,6 @@ jQuery(async function () {
             alert("✅ 直链歌单保存成功！");
         }
     });
-
 });
-
     renderPlaylist();
 });

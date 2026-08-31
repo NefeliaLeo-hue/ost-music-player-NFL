@@ -1,15 +1,12 @@
-/* 主容器 */
+/* ====== 主容器 ====== */
 #ost-player-container {
-    /* 基础定位保持不变 */
     position: fixed;
     top: 65px;
     right: 20px;
     z-index: 99999;
-    
-    /* 尺寸与外观 */
-    width: 310px;
-    height: 60px; /* 【关键】强制固定高度 (40封面 + 10x2内边距 = 60)，防止纵向抖动 */
-    box-sizing: border-box; /* 确保 padding 算在宽高内 */
+    width: 320px; /* 加宽容器，给5个按钮留足呼吸空间 */
+    height: 60px;
+    box-sizing: border-box;
     background: rgba(24, 24, 27, 0.95);
     border: 1px solid #3f3f46;
     border-radius: 12px;
@@ -21,70 +18,22 @@
     backdrop-filter: blur(8px);
     font-family: system-ui, sans-serif;
     color: #e4e4e7;
-    
-    /* 交互属性 */
     cursor: grab;
     user-select: none;
     touch-action: none;
-    overflow: hidden; /* 【关键】缩小过程中直接裁切超出部分，绝不互相挤压 */
-    
-    /* 动画：加入一点带有物理回弹感的 cubic-bezier */
+    overflow: hidden;
     transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), 
-                border-radius 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 保证封面图标绝对不会被压缩变形 */
-.ost-cover {
-    flex-shrink: 0; /* 拒绝被 Flex 挤压 */
-    
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #a855f7, #6366f1);
-    border-radius: 8px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 20px;
-    box-shadow: 0 0 10px rgba(168,85,247,0.4);
-}
-
-/* 内部信息和按钮组：添加透明度渐变 */
-.ost-info, .ost-controls {
-    opacity: 1;
-    white-space: nowrap; /* 【关键】防止文字在变窄时换行把容器撑破 */
-    transition: opacity 0.2s ease; 
-}
-.ost-info { flex: 1; display: flex; flex-direction: column; }
-
-/* === 最小化状态 === */
-#ost-player-container.minimized {
-    width: 60px;
-    border-radius: 16px; 
-    gap: 0;
-    cursor: pointer;
-}
-
-/* 最小化时：不要用 display:none，而是让它们透明并禁用点击 */
-#ost-player-container.minimized .ost-info,
-#ost-player-container.minimized .ost-controls {
-    opacity: 0;
-    pointer-events: none; 
-}
-
-
-    
-cursor: grab;
-    user-select: none;
-    transition: width 0.3s ease, height 0.3s ease, border-radius 0.3s ease, padding 0.3s ease, background 0.3s ease;
-    
-    
+                border-radius 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                padding 0.4s ease;
 }
 
 #ost-player-container:active {
     cursor: grabbing;
 }
 
+/* ====== 内部元素 ====== */
 .ost-cover {
+    flex-shrink: 0;
     width: 40px;
     height: 40px;
     background: linear-gradient(135deg, #a855f7, #6366f1);
@@ -94,13 +43,19 @@ cursor: grab;
     align-items: center;
     font-size: 20px;
     box-shadow: 0 0 10px rgba(168,85,247,0.4);
+    transition: border-radius 0.3s ease;
 }
+
 .ost-info {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 0.2s ease;
 }
+
 .ost-title {
     font-size: 13px;
     font-weight: bold;
@@ -108,14 +63,19 @@ cursor: grab;
     text-overflow: ellipsis;
     overflow: hidden;
 }
+
 .ost-subtitle {
     font-size: 11px;
     color: #a1a1aa;
 }
+
 .ost-controls {
     display: flex;
-    gap: 4px;
+    gap: 4px; /* 收紧按钮间距，让整体更精致 */
+    opacity: 1;
+    transition: opacity 0.2s ease;
 }
+
 .ost-btn {
     background: none;
     border: none;
@@ -126,35 +86,37 @@ cursor: grab;
     border-radius: 50%;
     transition: background 0.2s;
 }
+
 .ost-btn:hover {
     background: rgba(255,255,255,0.1);
 }
 
-/* 悬浮球（最小化）状态 */
+/* ====== 最小化状态 (iOS 桌面图标风格) ====== */
 #ost-player-container.minimized {
-    width: 50px;
-    height: 50px;
-    padding: 5px;
-    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    padding: 6px; /* 保留画框内边距 */
+    border-radius: 16px; /* 外层微圆角 */
     gap: 0;
-    justify-content: center;
 }
 
 /* 最小化时隐藏文字和按钮 */
 #ost-player-container.minimized .ost-info,
 #ost-player-container.minimized .ost-controls {
-    display: none; 
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    margin: 0;
 }
 
-/* 最小化时让封面填满整个圆球 */
+/* 最小化时的封面适配 */
 #ost-player-container.minimized .ost-cover {
     width: 100%;
     height: 100%;
-    border-radius: 12px;
+    border-radius: 10px; /* 内层微圆角，与外层完美嵌套，告别穿模 */
     box-shadow: none;
-    cursor: pointer; /* 提示点击可以恢复 */
+    cursor: pointer;
 }
-
 
 /* ====== 歌单列表样式 ====== */
 #ost-playlist-container {
@@ -176,7 +138,6 @@ cursor: grab;
 .ost-playlist-item:last-child { border-bottom: none; }
 .ost-playlist-item:hover { background: #27272a; }
 
-/* 拖拽手柄 */
 .ost-drag-handle {
     cursor: grab;
     padding-right: 10px;
@@ -186,7 +147,6 @@ cursor: grab;
 }
 .ost-drag-handle:active { cursor: grabbing; }
 
-/* 链接文本：从右向左溢出隐藏，方便看清 .mp3 等后缀 */
 .ost-item-text {
     flex: 1;
     white-space: nowrap;
@@ -196,7 +156,6 @@ cursor: grab;
     text-align: left;
 }
 
-/* 删除按钮 */
 .ost-delete-btn {
     cursor: pointer;
     color: #ef4444;
@@ -206,10 +165,8 @@ cursor: grab;
 }
 .ost-delete-btn:hover { background: rgba(239, 68, 68, 0.2); }
 
-/* 正在被鼠标提起来拖拽的行 */
 .ost-playlist-item.dragging {
     opacity: 0.5;
     background: #3f3f46;
     box-shadow: 0 4px 8px rgba(0,0,0,0.5);
 }
-

@@ -22,6 +22,9 @@ jQuery(async function () {
     let playlist = savedLinks ? savedLinks.split("\n").filter(link => link.trim() !== "") : [];
     let currentIndex = Number(localStorage.getItem("ost_current_index")) || 0;
     
+    // 【新增】读取循环模式，默认 list (列表循环)，也可为 single (单曲循环)
+    let loopMode = localStorage.getItem("ost_loop_mode") || "list"; 
+    
     let audio = new Audio(playlist.length ? playlist[currentIndex] : "");
     audio.volume = Number(localStorage.getItem("ost_volume")) || 0.5;
     let wasPlaying = localStorage.getItem("ost_playing") === "true";
@@ -43,6 +46,8 @@ jQuery(async function () {
         <div class="ost-controls">
             <button class="ost-btn" id="ost-play-btn">▶️</button>
             <button class="ost-btn" id="ost-next-btn">⏭️</button>
+            <!-- 【新增】循环切换按钮 -->
+            <button class="ost-btn" id="ost-loop-btn">${loopMode === 'single' ? '🔂' : '🔁'}</button>
             <button class="ost-btn" id="ost-settings-btn">⚙️</button>
             <button class="ost-btn" id="ost-min-btn">🔽</button>
         </div>
@@ -76,6 +81,7 @@ jQuery(async function () {
 
     const playBtn = $('#ost-play-btn');
     const nextBtn = $('#ost-next-btn');
+    const loopBtn = $('#ost-loop-btn'); // 绑定循环按钮
     const settingsBtn = $('#ost-settings-btn');
     const settingsPanel = $('#ost-floating-settings');
     const saveBtn = $('#ost-save-btn');
@@ -158,6 +164,7 @@ jQuery(async function () {
     }
     updateTrackInfo();
 
+    // 播放/暂停
     playBtn.on('click', function() {
         if (playlist.length === 0) {
             alert("请先点击 ⚙️ 齿轮按钮，输入音乐链接！");
@@ -179,6 +186,7 @@ jQuery(async function () {
         }
     });
 
+    // 下一曲
     nextBtn.on('click', function() {
         if (playlist.length === 0) return;
         audio.pause();
@@ -190,7 +198,31 @@ jQuery(async function () {
         updateTrackInfo();
     });
 
-    audio.addEventListener('ended', () => nextBtn.click());
+    // 【新增】循环模式切换事件
+    loopBtn.on('click', function() {
+        if (loopMode === "list") {
+            loopMode = "single";
+            loopBtn.text("🔂");
+        } else {
+            loopMode = "list";
+            loopBtn.text("🔁");
+        }
+        localStorage.setItem("ost_loop_mode", loopMode);
+    });
+
+    // 【修改】自然播放结束后的拦截逻辑
+    audio.addEventListener('ended', () => {
+        if (playlist.length === 0) return;
+        
+        if (loopMode === "single") {
+            // 单曲循环：进度条清零，直接再次播放
+            audio.currentTime = 0;
+            audio.play().catch(err => console.log("重播失败:", err));
+        } else {
+            // 列表循环：自动点击“下一曲”（下一曲逻辑自带回到首曲的运算）
+            nextBtn.click();
+        }
+    });
 
     if (wasPlaying && playlist.length > 0) {
         audio.play().then(() => playBtn.text("⏸️")).catch(() => console.log("自动播放被拦截"));
@@ -237,12 +269,10 @@ jQuery(async function () {
                 
                 if (navigator.vibrate) navigator.vibrate(50); 
 
-                // 清除意外残留
                 document.querySelectorAll('.ost-drag-clone, .ost-drag-placeholder').forEach(el => el.remove());
 
                 const rect = li.getBoundingClientRect();
 
-                // 1. 生成悬浮克隆体
                 const clone = li.cloneNode(true); 
                 clone.classList.add('ost-drag-clone');
                 clone.style.position = 'fixed';
@@ -262,16 +292,14 @@ jQuery(async function () {
                 clone.style.willChange = 'transform';
                 document.body.appendChild(clone); 
 
-                // 2. 生成紫色的“虚假占位槽”去挤占位置
                 const placeholder = document.createElement('li');
                 placeholder.className = 'ost-playlist-item ost-drag-placeholder';
                 placeholder.style.cssText = li.style.cssText;
                 placeholder.style.background = 'rgba(168, 85, 247, 0.1)';
                 placeholder.innerHTML = li.innerHTML;
-                [...placeholder.children].forEach(child => child.style.opacity = '0'); // 隐藏槽内文字
+                [...placeholder.children].forEach(child => child.style.opacity = '0'); 
                 li.parentNode.insertBefore(placeholder, li.nextSibling);
 
-                // 3. 将原实体“原地隐藏”（绝对不破坏 DOM 节点，防止手机断开手指连接）
                 const originalCssText = li.style.cssText; 
                 li.style.opacity = '0';
                 li.style.height = '0px';
@@ -288,7 +316,6 @@ jQuery(async function () {
                     const dy = moveEvent.clientY - listStartY;
                     clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.02)`;
 
-                    // 移动虚假占位槽，而不是真身
                     const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.ost-drag-placeholder)')].filter(el => el !== li);
                     let nextSibling = siblings.find(sibling => {
                         const sRect = sibling.getBoundingClientRect();
@@ -307,11 +334,9 @@ jQuery(async function () {
                     if (navigator.vibrate) navigator.vibrate(30); 
                     clone.remove(); 
 
-                    // 4. 将真身瞬间插入到占位槽的最终位置，然后毁掉占位槽
                     playlistContainer.insertBefore(li, placeholder);
                     placeholder.remove();
 
-                    // 5. 解除隐身
                     li.style.cssText = originalCssText;
 
                     handle.removeEventListener('pointermove', onPointerMove);

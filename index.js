@@ -457,6 +457,9 @@ jQuery(async function () {
                 li.innerText = `${song.name || '未知歌曲'} - ${song.artist || '未知歌手'}`;
                 
                 li.addEventListener('click', () => {
+                    // 👇 暴力调试：直接弹窗显示 API 给这首歌的数据
+                    alert(JSON.stringify(song, null, 2));
+                    
                     if(song.url) {
                         tempPlaylist.push(song.url);
                         renderPlaylist(); // 实时更新直链界面的列表
@@ -510,7 +513,7 @@ jQuery(async function () {
         }
         
         settingsPanel.hide();
-        // 想要无打扰体验，可以直接注释掉下面这行 alert
+        // 如果想要无打扰体验，可以直接注释掉下面这行 alert
         alert("✅ 歌单保存成功！");
     });
 });

@@ -107,7 +107,7 @@ jQuery(async function () {
     let currentBlobUrl = null; 
 
     // =====================
-    // 注入 HTML (加入使用指南弹窗)
+    // 注入 HTML (支持拖拽头部)
     // =====================
     const playerHTML = `
     <div id="ost-player-container">
@@ -125,9 +125,11 @@ jQuery(async function () {
         </div>
     </div>
 
-    <div id="ost-floating-settings" style="display:none; position:fixed; top:80px; right:20px; width:280px; background:rgba(24,24,27,0.95); border:1px solid #3f3f46; border-radius:12px; padding:15px; box-shadow:0 8px 16px rgba(0,0,0,0.8); z-index:999999; backdrop-filter:blur(8px); font-family:system-ui, sans-serif; box-sizing:border-box;">
-        <div style="font-size:13px; color:#e4e4e7; font-weight:bold; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-            <span>🎵 播放列表设置</span>
+    <div id="ost-floating-settings" style="display:none; position:fixed; top:60px; right:20px; width:280px; background:rgba(24,24,27,0.95); border:1px solid #3f3f46; border-radius:12px; padding:15px; box-shadow:0 8px 16px rgba(0,0,0,0.8); z-index:999999; backdrop-filter:blur(8px); font-family:system-ui, sans-serif; box-sizing:border-box;">
+        
+        <!-- 设置面板顶部拖拽区 -->
+        <div id="ost-settings-header" style="font-size:13px; color:#e4e4e7; font-weight:bold; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; cursor:grab; touch-action:none; padding-bottom:5px;">
+            <span>🎵 播放列表设置 <span style="font-size:10px; color:#a1a1aa; font-weight:normal;">(按住拖拽)</span></span>
             <div>
                 <span id="ost-help-btn" style="cursor:pointer; color:#60a5fa; padding:2px 6px; font-size:14px; margin-right:4px;" title="使用指南">❓</span>
                 <span id="ost-close-btn" style="cursor:pointer; color:#a1a1aa; padding:2px 6px; font-size:14px;" title="关闭 (不保存修改)">✖</span>
@@ -173,10 +175,12 @@ jQuery(async function () {
     </div>
 
     <!-- ================= 独立的使用指南弹窗 ================= -->
-    <div id="ost-help-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:300px; max-height:85vh; overflow-y:auto; background:rgba(24,24,27,0.98); border:1px solid #3f3f46; border-radius:12px; padding:20px; box-shadow:0 12px 32px rgba(0,0,0,0.9); z-index:9999999; backdrop-filter:blur(12px); font-family:system-ui, sans-serif; box-sizing:border-box; color:#d4d4d8; font-size:12px; line-height:1.6;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #3f3f46; padding-bottom:10px;">
-            <span style="font-size:14px; font-weight:bold; color:#e4e4e7;">📖 播放器使用指南</span>
-            <span id="ost-help-close-btn" style="cursor:pointer; color:#ef4444; font-size:14px; font-weight:bold;">✖</span>
+    <div id="ost-help-modal" style="display:none; position:fixed; top:10vh; left:50%; transform:translate(-50%, 0); width:320px; max-height:85vh; overflow-y:auto; background:rgba(24,24,27,0.98); border:1px solid #3f3f46; border-radius:12px; padding:20px; box-shadow:0 12px 32px rgba(0,0,0,0.9); z-index:9999999; backdrop-filter:blur(12px); font-family:system-ui, sans-serif; box-sizing:border-box; color:#d4d4d8; font-size:12px; line-height:1.6;">
+        
+        <!-- 指南弹窗顶部拖拽区 -->
+        <div id="ost-help-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #3f3f46; padding-bottom:10px; cursor:grab; touch-action:none;">
+            <span style="font-size:14px; font-weight:bold; color:#e4e4e7;">📖 播放器使用指南 <span style="font-size:11px; color:#a1a1aa; font-weight:normal;">(按住拖拽)</span></span>
+            <span id="ost-help-close-btn" style="cursor:pointer; color:#ef4444; font-size:14px; font-weight:bold; padding:0 4px;">✖</span>
         </div>
         
         <div style="margin-bottom:12px;">
@@ -216,12 +220,69 @@ jQuery(async function () {
 
     const playerContainer = $('#ost-player-container');
     const settingsPanel = $('#ost-floating-settings');
-    const helpModal = $('#ost-help-modal'); // 引入指南弹窗
+    const helpModal = $('#ost-help-modal'); 
     const playBtn = playerContainer.find('#ost-play-btn');
     const nextBtn = playerContainer.find('#ost-next-btn');
     const loopBtn = playerContainer.find('#ost-loop-btn'); 
     const minBtn = playerContainer.find('#ost-min-btn');
     const trackNum = playerContainer.find('#ost-track-num');
+
+    // =====================
+    // 面板全局拖拽逻辑封装 (适配设置面板 & 指南弹窗)
+    // =====================
+    function makePanelDraggable(panelDOM, handleDOM) {
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+
+        handleDOM.addEventListener('pointerdown', (e) => {
+            // 如果点到的是按钮，不触发拖拽
+            if (e.target.closest('#ost-close-btn, #ost-help-btn, #ost-help-close-btn')) return;
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            const rect = panelDOM.getBoundingClientRect();
+            initialX = rect.left;
+            initialY = rect.top;
+
+            // 锁定绝对位置，清除原本的居中对齐带来的影响
+            panelDOM.style.transform = 'none';
+            panelDOM.style.right = 'auto';
+            panelDOM.style.bottom = 'auto';
+            panelDOM.style.margin = '0';
+            
+            panelDOM.style.left = initialX + 'px';
+            panelDOM.style.top = initialY + 'px';
+            
+            handleDOM.setPointerCapture(e.pointerId);
+            handleDOM.style.cursor = 'grabbing';
+        });
+
+        handleDOM.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault(); // 防止手机端拖拽时页面跟着滚动
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            panelDOM.style.left = (initialX + dx) + 'px';
+            panelDOM.style.top = (initialY + dy) + 'px';
+        });
+
+        const endDrag = (e) => {
+            if (isDragging) {
+                isDragging = false;
+                handleDOM.releasePointerCapture(e.pointerId);
+                handleDOM.style.cursor = 'grab';
+            }
+        };
+        handleDOM.addEventListener('pointerup', endDrag);
+        handleDOM.addEventListener('pointercancel', endDrag);
+    }
+
+    // 绑定设置面板的头部拖拽
+    makePanelDraggable(settingsPanel[0], document.getElementById('ost-settings-header'));
+    // 绑定指南弹窗的头部拖拽
+    makePanelDraggable(helpModal[0], document.getElementById('ost-help-header'));
 
     // =====================
     // 弹窗交互绑定
@@ -230,30 +291,30 @@ jQuery(async function () {
     $('#ost-help-close-btn').on('click', () => helpModal.fadeOut(200));
 
     // =====================
-    // 拖拽逻辑
+    // 主悬浮窗的拖拽逻辑
     // =====================
     const playerDOM = playerContainer[0];
-    let isDragging = false, isMoved = false; 
-    let startX, startY, initialX, initialY;
+    let isPlayerDragging = false, isPlayerMoved = false; 
+    let pStartX, pStartY, pInitialX, pInitialY;
     playerDOM.addEventListener('pointerdown', (e) => {
         if (e.target.closest('button, input, .ost-edit-btn, .ost-delete-btn')) return; 
-        isDragging = true; isMoved = false; 
-        startX = e.clientX; startY = e.clientY;
+        isPlayerDragging = true; isPlayerMoved = false; 
+        pStartX = e.clientX; pStartY = e.clientY;
         const rect = playerDOM.getBoundingClientRect();
-        initialX = rect.left; initialY = rect.top;
-        playerDOM.style.right = 'auto'; playerDOM.style.left = initialX + 'px'; playerDOM.style.top = initialY + 'px';
+        pInitialX = rect.left; pInitialY = rect.top;
+        playerDOM.style.right = 'auto'; playerDOM.style.left = pInitialX + 'px'; playerDOM.style.top = pInitialY + 'px';
         playerDOM.style.transition = 'none'; playerDOM.setPointerCapture(e.pointerId);
     });
     playerDOM.addEventListener('pointermove', (e) => {
-        if (!isDragging) return;
-        const dx = e.clientX - startX, dy = e.clientY - startY;
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isMoved = true;
-        playerDOM.style.left = (initialX + dx) + 'px'; playerDOM.style.top = (initialY + dy) + 'px';
+        if (!isPlayerDragging) return;
+        const dx = e.clientX - pStartX, dy = e.clientY - pStartY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isPlayerMoved = true;
+        playerDOM.style.left = (pInitialX + dx) + 'px'; playerDOM.style.top = (pInitialY + dy) + 'px';
     });
-    const endDrag = (e) => { if (isDragging) { isDragging = false; playerDOM.style.transition = ''; playerDOM.releasePointerCapture(e.pointerId); }};
-    playerDOM.addEventListener('pointerup', endDrag); playerDOM.addEventListener('pointercancel', endDrag);
+    const playerEndDrag = (e) => { if (isPlayerDragging) { isPlayerDragging = false; playerDOM.style.transition = ''; playerDOM.releasePointerCapture(e.pointerId); }};
+    playerDOM.addEventListener('pointerup', playerEndDrag); playerDOM.addEventListener('pointercancel', playerEndDrag);
     minBtn.on('click', (e) => { e.stopPropagation(); playerContainer.addClass('minimized'); });
-    playerContainer.on('click', function() { if ($(this).hasClass('minimized') && !isMoved) $(this).removeClass('minimized'); });
+    playerContainer.on('click', function() { if ($(this).hasClass('minimized') && !isPlayerMoved) $(this).removeClass('minimized'); });
 
     // =====================
     // 异步播放核心逻辑

@@ -107,7 +107,7 @@ jQuery(async function () {
     let currentBlobUrl = null; 
 
     // =====================
-    // 注入 HTML 
+    // 注入 HTML (加入使用指南弹窗)
     // =====================
     const playerHTML = `
     <div id="ost-player-container">
@@ -128,7 +128,10 @@ jQuery(async function () {
     <div id="ost-floating-settings" style="display:none; position:fixed; top:80px; right:20px; width:280px; background:rgba(24,24,27,0.95); border:1px solid #3f3f46; border-radius:12px; padding:15px; box-shadow:0 8px 16px rgba(0,0,0,0.8); z-index:999999; backdrop-filter:blur(8px); font-family:system-ui, sans-serif; box-sizing:border-box;">
         <div style="font-size:13px; color:#e4e4e7; font-weight:bold; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
             <span>🎵 播放列表设置</span>
-            <span id="ost-close-btn" style="cursor:pointer; color:#a1a1aa; padding:2px 6px; font-size:14px;" title="关闭 (不保存修改)">✖</span>
+            <div>
+                <span id="ost-help-btn" style="cursor:pointer; color:#60a5fa; padding:2px 6px; font-size:14px; margin-right:4px;" title="使用指南">❓</span>
+                <span id="ost-close-btn" style="cursor:pointer; color:#a1a1aa; padding:2px 6px; font-size:14px;" title="关闭 (不保存修改)">✖</span>
+            </div>
         </div>
         
         <div style="display: flex; gap: 10px; margin-bottom: 12px; border-bottom: 1px solid #3f3f46; padding-bottom: 10px;">
@@ -168,19 +171,67 @@ jQuery(async function () {
         
         <button id="ost-save-btn" style="margin-top:15px; width:100%; background:linear-gradient(135deg, #a855f7, #6366f1); border:none; color:white; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">💾 保存并应用当前列表</button>
     </div>
+
+    <!-- ================= 独立的使用指南弹窗 ================= -->
+    <div id="ost-help-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:300px; max-height:85vh; overflow-y:auto; background:rgba(24,24,27,0.98); border:1px solid #3f3f46; border-radius:12px; padding:20px; box-shadow:0 12px 32px rgba(0,0,0,0.9); z-index:9999999; backdrop-filter:blur(12px); font-family:system-ui, sans-serif; box-sizing:border-box; color:#d4d4d8; font-size:12px; line-height:1.6;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #3f3f46; padding-bottom:10px;">
+            <span style="font-size:14px; font-weight:bold; color:#e4e4e7;">📖 播放器使用指南</span>
+            <span id="ost-help-close-btn" style="cursor:pointer; color:#ef4444; font-size:14px; font-weight:bold;">✖</span>
+        </div>
+        
+        <div style="margin-bottom:12px;">
+            <strong style="color:#a855f7; font-size:13px;">▶️ 主悬浮窗</strong><br>
+            <span style="color:#e4e4e7;">▶️ / ⏸️</span> : 播放与暂停<br>
+            <span style="color:#e4e4e7;">⏭️</span> : 切换下一首<br>
+            <span style="color:#e4e4e7;">🔁 / 🔂</span> : 列表循环 / 单曲循环<br>
+            <span style="color:#e4e4e7;">⚙️</span> : 打开歌单设置面板<br>
+            <span style="color:#e4e4e7;">🔽</span> : 最小化悬浮窗（点击恢复）<br>
+            <span style="color:#a1a1aa; font-size:11px;">* 按住上方信息栏或空白处可自由拖拽位置。</span>
+        </div>
+
+        <div style="margin-bottom:12px;">
+            <strong style="color:#60a5fa; font-size:13px;">🔗 自定义歌单</strong><br>
+            <span style="color:#e4e4e7;">➕ 直链</span> : 填入音频直链 (支持换行批量)。<br>
+            <span style="color:#e4e4e7;">📁 本地</span> : 导入电脑/手机里的本地音频，将无缝保存在浏览器安全缓存中。<br>
+            <span style="color:#e4e4e7;">☰</span> : 按住可上下拖拽调整播放顺序。<br>
+            <span style="color:#e4e4e7;">✏️</span> : 重命名，让冗长的链接变好看。<br>
+            <span style="color:#e4e4e7;">❌</span> : 从列表中移除歌曲。
+        </div>
+
+        <div style="margin-bottom:12px;">
+            <strong style="color:#10b981; font-size:13px;">🌐 在线搜索</strong><br>
+            输入歌名或歌手即可搜索。<br>
+            点击搜索结果，系统会自动解析直链并添加到下方列表中。<br>
+            <span style="color:#ef4444; font-size:11px;">* 注意: 版权受限或VIP歌曲可能无法解析。</span>
+        </div>
+
+        <div>
+            <strong style="color:#fbbf24; font-size:13px;">💾 保存与丢弃</strong><br>
+            点击面板底部的 <b>"保存并应用"</b> 将立即保存当前列表并生效。若手滑误删或弄乱列表，直接点击右上角 <b>✖</b> 关闭，修改将被安全丢弃，不影响原歌单。
+        </div>
+    </div>
     `;
     
     $('body').append(playerHTML);
 
     const playerContainer = $('#ost-player-container');
     const settingsPanel = $('#ost-floating-settings');
+    const helpModal = $('#ost-help-modal'); // 引入指南弹窗
     const playBtn = playerContainer.find('#ost-play-btn');
     const nextBtn = playerContainer.find('#ost-next-btn');
     const loopBtn = playerContainer.find('#ost-loop-btn'); 
     const minBtn = playerContainer.find('#ost-min-btn');
     const trackNum = playerContainer.find('#ost-track-num');
 
+    // =====================
+    // 弹窗交互绑定
+    // =====================
+    $('#ost-help-btn').on('click', () => helpModal.fadeIn(200));
+    $('#ost-help-close-btn').on('click', () => helpModal.fadeOut(200));
+
+    // =====================
     // 拖拽逻辑
+    // =====================
     const playerDOM = playerContainer[0];
     let isDragging = false, isMoved = false; 
     let startX, startY, initialX, initialY;
@@ -252,7 +303,6 @@ jQuery(async function () {
         trackNum.text(`Track ${displayNum} / ${currentPlaybackList.length}`);
         
         const currentItem = currentPlaybackList[currentIndex];
-        // 允许任何带有自定义名称的歌曲显示名字
         const displayTitle = currentItem.name && currentItem.name !== currentItem.url ? currentItem.name : "ARCHIVE_OST";
         
         if (displayTitle !== "ARCHIVE_OST") {
@@ -313,7 +363,6 @@ jQuery(async function () {
         container.innerHTML = '';
         
         tempArray.forEach((item, index) => {
-            // 给每个项分配一个临时唯一ID，防止同名歌曲拖拽时数据错乱
             if (!item._uid) item._uid = Math.random().toString(36).substring(2, 9);
 
             const li = document.createElement('li');
@@ -385,7 +434,6 @@ jQuery(async function () {
                     li.style.cssText = originalCssText;
                     handle.removeEventListener('pointermove', onPointerMove); handle.removeEventListener('pointerup', cleanupDrag); handle.removeEventListener('pointercancel', cleanupDrag);
                     
-                    // 通过唯一的 _uid 精准重建数组结构
                     const currentDOMItems = [...container.querySelectorAll('.ost-playlist-item')];
                     const newTempArray = [];
                     currentDOMItems.forEach(domLi => {
@@ -484,7 +532,6 @@ jQuery(async function () {
             
             try {
                 await OST_DB.save(uniqueId, file);
-                // 上传本地文件时，直接用原本的文件名作为初始显示名称
                 tempPlaylistDirect.push({ type: 'local', id: uniqueId, name: file.name.replace(/\.[^/.]+$/, "") });
             } catch (err) {
                 console.error("保存本地文件失败:", err);
@@ -562,7 +609,6 @@ jQuery(async function () {
     // 统一保存与智能清理逻辑
     // =====================
     settingsPanel.find('#ost-save-btn').off('click').on('click', async function() {
-        // 清理由于取消编辑等原因可能残留的 _uid 属性，保持本地存储干净
         playlistDirect = tempPlaylistDirect.map(item => { const { _uid, ...rest } = item; return rest; });
         playlistSearch = tempPlaylistSearch.map(item => { const { _uid, ...rest } = item; return rest; });
         activeMode = playerMode; 
@@ -580,7 +626,6 @@ jQuery(async function () {
             audio.pause(); audio.src = ""; updateTrackInfo(); playBtn.text('▶️');
         }
         
-        // --- 智能垃圾回收 (删除 DB 中不在播放列表里的无用文件) ---
         try {
             const validLocalIds = new Set(playlistDirect.filter(item => item.type === 'local').map(item => item.id));
             const allDbKeys = await OST_DB.getAllKeys();

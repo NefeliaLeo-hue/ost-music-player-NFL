@@ -16,14 +16,29 @@ jQuery(async function () {
     console.log("[OST Player] Initialized");
 
     // =====================
-    // 数据读取与初始化
+    // 数据读取与双列表初始化
     // =====================
-    let savedLinks = localStorage.getItem("ost_custom_playlist");
-    let playlist = savedLinks ? savedLinks.split("\n").filter(link => link.trim() !== "") : [];
+    // 1. 直链歌单数据
+    let savedDirect = localStorage.getItem("ost_custom_playlist");
+    let playlistDirect = savedDirect ? savedDirect.split("\n").filter(link => link.trim() !== "") : [];
+    
+    // 2. 搜索歌单数据 (存为JSON以保留歌名: {name, url})
+    let playlistSearch = [];
+    let savedSearch = localStorage.getItem("ost_playlist_search");
+    if (savedSearch) {
+        try { playlistSearch = JSON.parse(savedSearch); } catch(e) { console.error("解析搜索歌单失败", e); }
+    }
+
+    // 当前激活模式 ("direct" 或 "search")
+    let activeMode = localStorage.getItem("ost_active_mode") || "direct";
+    let currentPlaybackList = activeMode === "direct" ? playlistDirect : playlistSearch.map(s => s.url);
+
     let currentIndex = Number(localStorage.getItem("ost_current_index")) || 0;
+    if (currentIndex >= currentPlaybackList.length) currentIndex = 0;
+    
     let loopMode = localStorage.getItem("ost_loop_mode") || "list"; 
     
-    let audio = new Audio(playlist.length ? playlist[currentIndex] : "");
+    let audio = new Audio(currentPlaybackList.length ? currentPlaybackList[currentIndex] : "");
     audio.volume = Number(localStorage.getItem("ost_volume")) || 0.5;
     let wasPlaying = localStorage.getItem("ost_playing") === "true";
 
@@ -51,99 +66,91 @@ jQuery(async function () {
     </div>
 
     <div id="ost-floating-settings" style="display:none; position:fixed; top:80px; right:20px; width:280px; background:rgba(24,24,27,0.95); border:1px solid #3f3f46; border-radius:12px; padding:15px; box-shadow:0 8px 16px rgba(0,0,0,0.8); z-index:999999; backdrop-filter:blur(8px); font-family:system-ui, sans-serif; box-sizing:border-box;">
-        <div style="font-size:13px; color:#e4e4e7; font-weight:bold; margin-bottom:12px;">🎵 播放列表设置</div>
+        <div style="font-size:13px; color:#e4e4e7; font-weight:bold; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>🎵 播放列表设置</span>
+            <span id="ost-close-btn" style="cursor:pointer; color:#a1a1aa; padding:2px 6px; font-size:14px;" title="关闭 (不保存修改)">✖</span>
+        </div>
         
         <!-- 模式切换开关 -->
-        <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid #3f3f46; padding-bottom: 10px;">
-            <div id="ost-mode-direct" style="flex: 1; text-align: center; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🔗 直链歌单</div>
-            <div id="ost-mode-search" style="flex: 1; text-align: center; opacity: 0.5; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🌐 在线搜索</div>
+        <div style="display: flex; gap: 10px; margin-bottom: 12px; border-bottom: 1px solid #3f3f46; padding-bottom: 10px;">
+            <div id="ost-mode-direct" style="flex: 1; text-align: center; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🔗 直链模式</div>
+            <div id="ost-mode-search" style="flex: 1; text-align: center; opacity: 0.5; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🌐 搜索模式</div>
+        </div>
+
+        <!-- 排序工具栏 (全局通用) -->
+        <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+            <button class="ost-sort-btn" data-sort="az" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">A-Z</button>
+            <button class="ost-sort-btn" data-sort="za" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">Z-A</button>
+            <button class="ost-sort-btn" data-sort="reverse" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">反转</button>
+            <button class="ost-sort-btn" data-sort="random" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">打乱</button>
         </div>
 
         <!-- ================= 直链模式 UI ================= -->
         <div id="ost-direct-ui">
-            <div style="font-size:10px; color:#a1a1aa; margin-bottom:6px;">添加新歌曲 (直链)：</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <input type="text" id="ost-new-link" style="flex: 1; padding: 6px; background:#18181b; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; font-size:11px; outline:none;" placeholder="粘贴链接...">
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <input type="text" id="ost-new-link" style="flex: 1; padding: 6px; background:#18181b; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; font-size:11px; outline:none;" placeholder="粘贴直链网址...">
                 <button id="ost-add-btn" style="background:#4f46e5; border:none; color:white; padding:0 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">➕ 添 加</button>
             </div>
-
-            <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-                <button class="ost-sort-btn" data-sort="az" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">A-Z</button>
-                <button class="ost-sort-btn" data-sort="za" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">Z-A</button>
-                <button class="ost-sort-btn" data-sort="reverse" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">反转</button>
-                <button class="ost-sort-btn" data-sort="random" style="flex:1; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px;">打乱</button>
-            </div>
-
-            <ul id="ost-playlist-container" style="list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; overflow-x: hidden; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
-                <!-- JS 动态渲染列表 -->
+            <div style="font-size:10px; color:#a1a1aa; margin-bottom:6px;">直链歌单：</div>
+            <ul id="ost-playlist-direct-container" style="list-style: none; padding: 0; margin: 0; max-height: 160px; overflow-y: auto; overflow-x: hidden; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
+                <!-- JS 动态渲染直链列表 -->
             </ul>
         </div>
 
         <!-- ================= 在线搜索模式 UI ================= -->
         <div id="ost-search-ui" style="display: none;">
-            <div style="font-size:10px; color:#a1a1aa; margin-bottom:6px;">搜索歌曲并添加到歌单：</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                 <input type="text" id="ost-search-input" style="flex: 1; padding: 6px; background:#18181b; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; font-size:11px; outline:none;" placeholder="输入歌名或歌手...">
                 <button id="ost-do-search-btn" style="background:#4f46e5; border:none; color:white; padding:0 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">🔍 搜 索</button>
             </div>
-            <ul id="ost-search-results" style="list-style: none; padding: 0; margin: 0; max-height: 140px; overflow-y: auto; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
+            <ul id="ost-search-results" style="list-style: none; padding: 0; margin: 0; max-height: 100px; overflow-y: auto; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
                 <!-- 搜索结果动态渲染 -->
+            </ul>
+
+            <div style="font-size:10px; color:#a1a1aa; margin:10px 0 6px;">我的搜索歌单：</div>
+            <ul id="ost-playlist-search-container" style="list-style: none; padding: 0; margin: 0; max-height: 120px; overflow-y: auto; overflow-x: hidden; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
+                <!-- JS 动态渲染搜索到的已保存列表 -->
             </ul>
         </div>
         
-        <button id="ost-save-btn" style="margin-top:15px; width:100%; background:linear-gradient(135deg, #a855f7, #6366f1); border:none; color:white; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">💾 保存并应用</button>
+        <button id="ost-save-btn" style="margin-top:15px; width:100%; background:linear-gradient(135deg, #a855f7, #6366f1); border:none; color:white; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">💾 保存并应用当前列表</button>
     </div>
     `;
     
     $('body').append(playerHTML);
 
-    // 绝对作用域锁定
     const playerContainer = $('#ost-player-container');
     const settingsPanel = $('#ost-floating-settings');
-
     const playBtn = playerContainer.find('#ost-play-btn');
     const nextBtn = playerContainer.find('#ost-next-btn');
     const loopBtn = playerContainer.find('#ost-loop-btn'); 
-    const settingsBtn = playerContainer.find('#ost-settings-btn');
     const minBtn = playerContainer.find('#ost-min-btn');
     const trackNum = playerContainer.find('#ost-track-num');
-
-    const saveBtn = settingsPanel.find('#ost-save-btn');
-    const newLinkInput = settingsPanel.find('#ost-new-link')[0];
-    const addBtn = settingsPanel.find('#ost-add-btn')[0];
-    const playlistContainer = settingsPanel.find('#ost-playlist-container')[0];
 
     // =====================
     // 拖拽与最小化逻辑 (主悬浮窗)
     // =====================
     const playerDOM = playerContainer[0];
-    let isDragging = false;
-    let isMoved = false; 
+    let isDragging = false, isMoved = false; 
     let startX, startY, initialX, initialY;
 
     playerDOM.addEventListener('pointerdown', (e) => {
         if (e.target.closest('button, input')) return; 
-        isDragging = true;
-        isMoved = false; 
-        startX = e.clientX;
-        startY = e.clientY;
+        isDragging = true; isMoved = false; 
+        startX = e.clientX; startY = e.clientY;
         const rect = playerDOM.getBoundingClientRect();
-        initialX = rect.left;
-        initialY = rect.top;
+        initialX = rect.left; initialY = rect.top;
         playerDOM.style.right = 'auto'; 
-        playerDOM.style.left = initialX + 'px';
-        playerDOM.style.top = initialY + 'px';
+        playerDOM.style.left = initialX + 'px'; playerDOM.style.top = initialY + 'px';
         playerDOM.style.transition = 'none'; 
         playerDOM.setPointerCapture(e.pointerId);
     });
 
     playerDOM.addEventListener('pointermove', (e) => {
         if (!isDragging) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
+        const dx = e.clientX - startX; const dy = e.clientY - startY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isMoved = true;
-        playerDOM.style.left = (initialX + dx) + 'px';
-        playerDOM.style.top = (initialY + dy) + 'px';
+        playerDOM.style.left = (initialX + dx) + 'px'; playerDOM.style.top = (initialY + dy) + 'px';
     });
 
     const endDrag = (e) => {
@@ -153,18 +160,11 @@ jQuery(async function () {
             playerDOM.releasePointerCapture(e.pointerId);
         }
     };
-    playerDOM.addEventListener('pointerup', endDrag);
-    playerDOM.addEventListener('pointercancel', endDrag);
+    playerDOM.addEventListener('pointerup', endDrag); playerDOM.addEventListener('pointercancel', endDrag);
 
-    minBtn.on('click', function(e) {
-        e.stopPropagation(); 
-        playerContainer.addClass('minimized');
-    });
-
-    playerContainer.on('click', function(e) {
-        if ($(this).hasClass('minimized') && !isMoved) {
-            $(this).removeClass('minimized');
-        }
+    minBtn.on('click', (e) => { e.stopPropagation(); playerContainer.addClass('minimized'); });
+    playerContainer.on('click', function() {
+        if ($(this).hasClass('minimized') && !isMoved) $(this).removeClass('minimized');
     });
 
     // =====================
@@ -175,250 +175,237 @@ jQuery(async function () {
     audio.addEventListener("waiting", () => {
         clearTimeout(playTimer);
         playTimer = setTimeout(() => {
-            console.log("[OST Player] 音乐加载超时，自动跳过");
+            console.log("[OST Player] 音乐加载超时，跳过");
             nextBtn.click();
         }, 20000);
     });
 
     function updateTrackInfo() {
-        if (playlist.length === 0) {
+        if (currentPlaybackList.length === 0) {
             trackNum.text("No Tracks");
+            playerContainer.find('.ost-title').text("ARCHIVE_OST").css('max-width', 'none');
             return;
         }
         let displayNum = (currentIndex + 1).toString().padStart(2, '0');
-        trackNum.text(`Track ${displayNum} / ${playlist.length}`);
+        trackNum.text(`Track ${displayNum} / ${currentPlaybackList.length}`);
+        
+        // 彩蛋：如果是搜索列表，悬浮窗标题直接显示歌名
+        if (activeMode === "search" && playlistSearch[currentIndex]) {
+            playerContainer.find('.ost-title').text(playlistSearch[currentIndex].name).css({
+                'white-space': 'nowrap', 'overflow': 'hidden', 'text-overflow': 'ellipsis',
+                'display': 'inline-block', 'max-width': '95px', 'vertical-align': 'bottom'
+            });
+        } else {
+            playerContainer.find('.ost-title').text("ARCHIVE_OST").css('max-width', 'none');
+        }
     }
     updateTrackInfo();
 
     playBtn.on('click', function() {
-        if (playlist.length === 0) {
-            alert("请先点击 ⚙️ 齿轮按钮，添加音乐！");
+        if (currentPlaybackList.length === 0) {
+            alert("当前激活的歌单为空，请先添加音乐并保存！");
             settingsPanel.show();
             return;
         }
         if (audio.paused) {
             audio.play().then(() => {
-                localStorage.setItem("ost_playing", "true");
-                playBtn.text("⏸️");
+                localStorage.setItem("ost_playing", "true"); playBtn.text("⏸️");
             }).catch(err => {
-                console.log("[OST Player] 播放失败:", err);
-                playBtn.text("▶️");
+                console.log("[OST Player] 播放失败:", err); playBtn.text("▶️");
             });
         } else {
-            audio.pause();
-            localStorage.setItem("ost_playing", "false");
-            playBtn.text("▶️");
+            audio.pause(); localStorage.setItem("ost_playing", "false"); playBtn.text("▶️");
         }
     });
 
     nextBtn.on('click', function() {
-        if (playlist.length === 0) return;
+        if (currentPlaybackList.length === 0) return;
         audio.pause();
-        currentIndex = (currentIndex + 1) % playlist.length;
+        currentIndex = (currentIndex + 1) % currentPlaybackList.length;
         localStorage.setItem("ost_current_index", currentIndex);
-        audio.src = playlist[currentIndex];
-        audio.play();
-        playBtn.text('⏸️');
+        audio.src = currentPlaybackList[currentIndex];
+        audio.play(); playBtn.text('⏸️');
         updateTrackInfo();
     });
 
     loopBtn.on('click', function() {
-        if (loopMode === "list") {
-            loopMode = "single";
-            loopBtn.text("🔂");
-        } else {
-            loopMode = "list";
-            loopBtn.text("🔁");
-        }
+        loopMode = loopMode === "list" ? "single" : "list";
+        loopBtn.text(loopMode === "single" ? "🔂" : "🔁");
         localStorage.setItem("ost_loop_mode", loopMode);
     });
 
     audio.addEventListener('ended', () => {
-        if (playlist.length === 0) return;
+        if (currentPlaybackList.length === 0) return;
         if (loopMode === "single") {
-            audio.currentTime = 0;
-            audio.play().catch(err => console.log("重播失败:", err));
+            audio.currentTime = 0; audio.play().catch(e => console.log(e));
         } else {
             nextBtn.click();
         }
     });
 
-    if (wasPlaying && playlist.length > 0) {
-        audio.play().then(() => playBtn.text("⏸️")).catch(() => console.log("自动播放被拦截"));
+    if (wasPlaying && currentPlaybackList.length > 0) {
+        audio.play().then(() => playBtn.text("⏸️")).catch(() => console.log("拦截"));
     }
 
-    settingsBtn.on('click', () => settingsPanel.toggle());
-
     // =====================
-    // 歌单排序与拖拽逻辑
+    // 灵活闭包设置界面 & 双列表渲染逻辑
     // =====================
-    let tempPlaylist = [...playlist]; 
+    let tempPlaylistDirect = [...playlistDirect]; 
+    let tempPlaylistSearch = [...playlistSearch]; 
     let isListDragging = false; 
 
-    function renderPlaylist() {
-        playlistContainer.innerHTML = '';
+    // 通用渲染器 (既能渲染纯URL，也能渲染带有歌名的对象)
+    function renderDraggableList(containerId, tempArray, isSearchObj) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
         
-        tempPlaylist.forEach((link, index) => {
+        tempArray.forEach((item, index) => {
             const li = document.createElement('li');
             li.className = 'ost-playlist-item';
             li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; box-sizing: border-box;";
             
+            const url = isSearchObj ? item.url : item;
+            const name = isSearchObj ? item.name : item;
+
             li.innerHTML = `
                 <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
-                <span class="ost-item-text" title="${link}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: #a1a1aa; font-size: 11px;">${link}</span>
+                <span class="ost-item-text" data-url="${url}" data-name="${name}" title="${name}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${isSearchObj ? '' : 'direction: rtl; text-align: left;'} color: #a1a1aa; font-size: 11px;">${name}</span>
                 <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
             `;
 
             li.querySelector('.ost-delete-btn').addEventListener('click', () => {
-                tempPlaylist.splice(index, 1);
-                renderPlaylist();
+                tempArray.splice(index, 1);
+                renderDraggableList(containerId, tempArray, isSearchObj);
             });
 
             const handle = li.querySelector('.ost-drag-handle');
-            
             handle.addEventListener('pointerdown', (e) => {
                 if (isListDragging) return;
-                e.preventDefault(); 
-                handle.setPointerCapture(e.pointerId); 
-                isListDragging = true; 
-                
+                e.preventDefault(); handle.setPointerCapture(e.pointerId); isListDragging = true; 
                 if (navigator.vibrate) navigator.vibrate(50); 
+                
                 document.querySelectorAll('.ost-drag-clone, .ost-drag-placeholder').forEach(el => el.remove());
                 const rect = li.getBoundingClientRect();
-
                 const clone = li.cloneNode(true); 
                 clone.classList.add('ost-drag-clone');
-                clone.style.position = 'fixed';
-                clone.style.top = rect.top + 'px';
-                clone.style.left = rect.left + 'px';
-                clone.style.width = rect.width + 'px';
-                clone.style.height = rect.height + 'px';
-                clone.style.margin = '0';
-                clone.style.zIndex = '999999'; 
-                clone.style.background = '#27272a';
-                clone.style.boxShadow = '0 12px 24px rgba(0,0,0,0.8)';
-                clone.style.border = '1px solid #a855f7'; 
-                clone.style.borderRadius = '6px';
-                clone.style.opacity = '0.98';
-                clone.style.pointerEvents = 'none'; 
-                clone.style.transform = 'translate3d(0px, 0px, 0px) scale(1.02)';
-                clone.style.willChange = 'transform';
+                clone.style.cssText = `position:fixed; top:${rect.top}px; left:${rect.left}px; width:${rect.width}px; height:${rect.height}px; z-index:999999; background:#27272a; box-shadow:0 12px 24px rgba(0,0,0,0.8); border:1px solid #a855f7; border-radius:6px; opacity:0.98; pointer-events:none;`;
                 document.body.appendChild(clone); 
 
                 const placeholder = document.createElement('li');
                 placeholder.className = 'ost-playlist-item ost-drag-placeholder';
-                placeholder.style.cssText = li.style.cssText;
-                placeholder.style.background = 'rgba(168, 85, 247, 0.1)';
-                placeholder.innerHTML = li.innerHTML;
-                [...placeholder.children].forEach(child => child.style.opacity = '0'); 
+                placeholder.style.cssText = li.style.cssText + 'background:rgba(168, 85, 247, 0.1); opacity:0;';
                 li.parentNode.insertBefore(placeholder, li.nextSibling);
 
                 const originalCssText = li.style.cssText; 
-                li.style.opacity = '0';
-                li.style.height = '0px';
-                li.style.padding = '0px';
-                li.style.border = 'none';
-                li.style.overflow = 'hidden';
-                li.style.pointerEvents = 'none';
+                li.style.cssText += 'opacity:0; height:0px; padding:0px; border:none; overflow:hidden; pointer-events:none;';
 
-                const listStartX = e.clientX;
-                const listStartY = e.clientY;
+                const startY = e.clientY;
+                const onPointerMove = (moveEvt) => {
+                    clone.style.transform = `translate3d(0, ${moveEvt.clientY - startY}px, 0)`;
+                    const siblings = [...container.querySelectorAll('.ost-playlist-item:not(.ost-drag-placeholder)')].filter(el => el !== li);
+                    let nextSib = siblings.find(sib => moveEvt.clientY < sib.getBoundingClientRect().top + sib.getBoundingClientRect().height / 2);
+                    if (nextSib !== placeholder.nextElementSibling) container.insertBefore(placeholder, nextSib);
+                };
 
-                const onPointerMove = (moveEvent) => {
-                    const dx = moveEvent.clientX - listStartX;
-                    const dy = moveEvent.clientY - listStartY;
-                    clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.02)`;
-
-                    const siblings = [...playlistContainer.querySelectorAll('.ost-playlist-item:not(.ost-drag-placeholder)')].filter(el => el !== li);
-                    let nextSibling = siblings.find(sibling => {
-                        const sRect = sibling.getBoundingClientRect();
-                        return moveEvent.clientY < sRect.top + sRect.height / 2;
-                    });
-
-                    if (nextSibling !== placeholder.nextElementSibling) {
-                        playlistContainer.insertBefore(placeholder, nextSibling);
+                const cleanupDrag = (upEvt) => {
+                    handle.releasePointerCapture(upEvt.pointerId); isListDragging = false; 
+                    if (navigator.vibrate) navigator.vibrate(30); 
+                    clone.remove(); container.insertBefore(li, placeholder); placeholder.remove();
+                    li.style.cssText = originalCssText;
+                    handle.removeEventListener('pointermove', onPointerMove); handle.removeEventListener('pointerup', cleanupDrag); handle.removeEventListener('pointercancel', cleanupDrag);
+                    
+                    // 重建数组结构 (防止拖拽后数据错乱)
+                    const currentItems = [...container.querySelectorAll('.ost-item-text')];
+                    tempArray.length = 0;
+                    if (isSearchObj) {
+                        currentItems.forEach(el => tempArray.push({ name: el.getAttribute('data-name'), url: el.getAttribute('data-url') }));
+                    } else {
+                        currentItems.forEach(el => tempArray.push(el.getAttribute('data-url')));
                     }
                 };
 
-                const cleanupDrag = (upEvent) => {
-                    handle.releasePointerCapture(upEvent.pointerId);
-                    isListDragging = false; 
-                    if (navigator.vibrate) navigator.vibrate(30); 
-                    clone.remove(); 
-                    playlistContainer.insertBefore(li, placeholder);
-                    placeholder.remove();
-                    li.style.cssText = originalCssText;
-                    handle.removeEventListener('pointermove', onPointerMove);
-                    handle.removeEventListener('pointerup', cleanupDrag);
-                    handle.removeEventListener('pointercancel', cleanupDrag);
-                    const currentItems = [...playlistContainer.querySelectorAll('.ost-item-text')];
-                    tempPlaylist = currentItems.map(item => item.getAttribute('title'));
-                };
-
                 handle.addEventListener('pointermove', onPointerMove);
-                handle.addEventListener('pointerup', cleanupDrag);
-                handle.addEventListener('pointercancel', cleanupDrag);
+                handle.addEventListener('pointerup', cleanupDrag); handle.addEventListener('pointercancel', cleanupDrag);
             });
 
-            playlistContainer.appendChild(li);
+            container.appendChild(li);
         });
     }
 
-    addBtn.addEventListener('click', () => {
-        const inputVal = newLinkInput.value.trim();
-        if (inputVal) {
-            const newLinks = inputVal.split('\n').map(l => l.trim()).filter(l => l !== '');
-            tempPlaylist.push(...newLinks);
-            newLinkInput.value = '';
-            renderPlaylist();
-        }
-    });
-
-    settingsPanel.find('.ost-sort-btn').on('click', function() {
-        const type = $(this).data('sort');
-        if (type === 'az') tempPlaylist.sort();
-        if (type === 'za') tempPlaylist.sort().reverse();
-        if (type === 'reverse') tempPlaylist.reverse();
-        if (type === 'random') tempPlaylist.sort(() => Math.random() - 0.5);
-        renderPlaylist();
-    });
-
-    renderPlaylist();
+    function updateAllUI() {
+        renderDraggableList('ost-playlist-direct-container', tempPlaylistDirect, false);
+        renderDraggableList('ost-playlist-search-container', tempPlaylistSearch, true);
+    }
+    updateAllUI();
 
     // =====================
-    // 双标签页 (直链 / 搜索) UI切换逻辑
+    // 设置面板开关与“放弃修改”逻辑
     // =====================
-    let playerMode = localStorage.getItem("ost_player_mode") || "direct";
-    
+    const closeSettings = () => {
+        // 关闭时直接重置 temp，丢弃未保存的修改
+        tempPlaylistDirect = [...playlistDirect];
+        tempPlaylistSearch = [...playlistSearch];
+        updateAllUI();
+        settingsPanel.hide();
+    };
+
+    playerContainer.find('#ost-settings-btn').on('click', () => {
+        if (settingsPanel.is(':visible')) closeSettings();
+        else settingsPanel.show();
+    });
+    settingsPanel.find('#ost-close-btn').on('click', closeSettings);
+
+    // =====================
+    // UI 标签切换与全局排序逻辑
+    // =====================
+    let playerMode = activeMode; 
     const modeDirectBtn = settingsPanel.find('#ost-mode-direct');
     const modeSearchBtn = settingsPanel.find('#ost-mode-search');
     const directUI = settingsPanel.find('#ost-direct-ui');
     const searchUI = settingsPanel.find('#ost-search-ui');
 
-    function switchToDirectUI() {
-        modeDirectBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
-        modeSearchBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
-        directUI.show();
-        searchUI.hide();
-        playerMode = "direct";
+    function switchTo(mode) {
+        playerMode = mode;
+        if(mode === "direct") {
+            modeDirectBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
+            modeSearchBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
+            directUI.show(); searchUI.hide();
+        } else {
+            modeSearchBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
+            modeDirectBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
+            searchUI.show(); directUI.hide();
+        }
     }
+    modeDirectBtn.on('click', () => switchTo("direct"));
+    modeSearchBtn.on('click', () => switchTo("search"));
+    switchTo(playerMode);
 
-    function switchToSearchUI() {
-        modeSearchBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
-        modeDirectBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
-        searchUI.show();
-        directUI.hide();
-        playerMode = "search";
-    }
+    settingsPanel.find('.ost-sort-btn').on('click', function() {
+        const type = $(this).data('sort');
+        const targetArray = playerMode === "direct" ? tempPlaylistDirect : tempPlaylistSearch;
+        
+        const getVal = (item) => typeof item === 'string' ? item : item.name;
 
-    modeDirectBtn.on('click', switchToDirectUI);
-    modeSearchBtn.on('click', switchToSearchUI);
+        if (type === 'az') targetArray.sort((a,b) => getVal(a).localeCompare(getVal(b)));
+        if (type === 'za') targetArray.sort((a,b) => getVal(b).localeCompare(getVal(a)));
+        if (type === 'reverse') targetArray.reverse();
+        if (type === 'random') targetArray.sort(() => Math.random() - 0.5);
+        updateAllUI();
+    });
 
-    if (playerMode === "search") {
-        switchToSearchUI();
-    } else {
-        switchToDirectUI();
-    }
+    // =====================
+    // 手动直链添加逻辑
+    // =====================
+    const newLinkInput = settingsPanel.find('#ost-new-link')[0];
+    settingsPanel.find('#ost-add-btn').on('click', () => {
+        const inputVal = newLinkInput.value.trim();
+        if (inputVal) {
+            const newLinks = inputVal.split('\n').map(l => l.trim()).filter(l => l !== '');
+            tempPlaylistDirect.push(...newLinks);
+            newLinkInput.value = '';
+            updateAllUI();
+        }
+    });
 
     // =====================
     // 在线搜索与 API 接入逻辑
@@ -430,16 +417,13 @@ jQuery(async function () {
     searchBtn.on('click', async function() {
         const keyword = searchInput.val().trim();
         if (!keyword) return;
-
         searchResults.html('<li style="color:#a1a1aa; padding:8px; font-size:11px; text-align:center;">🔍 搜索中...</li>');
 
         try {
             const response = await fetch(`https://music-api.gdstudio.xyz/api.php?types=search&source=netease&name=${encodeURIComponent(keyword)}`);
             const data = await response.json();
-
             searchResults.empty();
             
-            // 兼容可能不同的 JSON 结构返回
             const songs = data.data || data; 
             if (!songs || !songs.length) {
                 searchResults.html('<li style="color:#a1a1aa; padding:8px; font-size:11px; text-align:center;">未找到结果，换个词试试？</li>');
@@ -449,100 +433,71 @@ jQuery(async function () {
             songs.forEach(song => {
                 const li = document.createElement('li');
                 li.style.cssText = "padding: 8px 12px; border-bottom: 1px solid #27272a; color: #e4e4e7; font-size: 11px; cursor: pointer; transition: background 0.2s;";
-                
-                // 悬停反馈效果
                 li.onmouseenter = () => li.style.background = 'rgba(168, 85, 247, 0.1)';
                 li.onmouseleave = () => li.style.background = 'transparent';
                 
                 const originalText = `${song.name || '未知歌曲'} - ${song.artist || '未知歌手'}`;
                 li.innerText = originalText;
                 
-                // 替换为“二段获取”逻辑
                 li.addEventListener('click', async () => {
-                    if (!song.id) {
-                        alert('⚠️ 获取歌曲数据异常：缺少ID');
-                        return;
-                    }
-                    
-                    li.innerText = '⏳ 正在解析直链...';
-                    li.style.color = '#fbbf24'; // 黄色提示
+                    if (!song.id) { alert('⚠️ 获取歌曲数据异常：缺少ID'); return; }
+                    li.innerText = '⏳ 正在解析直链...'; li.style.color = '#fbbf24';
 
                     try {
-                        // 发送二次请求：拿 id 换真实的 MP3 url
                         const urlReq = await fetch(`https://music-api.gdstudio.xyz/api.php?types=url&id=${song.id}&source=${song.source || 'netease'}`);
                         const urlData = await urlReq.json();
-
-                        // 兼容 API 返回的数据结构 (可能是 {url: "..."} 或 {data: {url: "..."}})
                         let finalUrl = urlData.url || (urlData.data && urlData.data.url) || null;
 
                         if (finalUrl && typeof finalUrl === 'string' && finalUrl.startsWith('http')) {
-                            tempPlaylist.push(finalUrl);
-                            renderPlaylist(); // 实时更新直链界面的列表
+                            // 关键：将带歌名的对象推入搜索歌单数组
+                            tempPlaylistSearch.push({ name: originalText, url: finalUrl });
+                            updateAllUI(); 
                             
-                            // 可视化成功反馈
-                            li.innerText = '✅ 已添加到歌单';
-                            li.style.color = '#10b981';
-                            setTimeout(() => {
-                                li.innerText = originalText;
-                                li.style.color = '#e4e4e7';
-                            }, 1500);
+                            li.innerText = '✅ 已添加到搜索歌单'; li.style.color = '#10b981';
+                            setTimeout(() => { li.innerText = originalText; li.style.color = '#e4e4e7'; }, 1500);
                         } else {
-                            // 遇到版权墙或者VIP歌曲，拿不到直链
-                            li.innerText = '⚠️ 暂无版权或需VIP';
-                            li.style.color = '#ef4444';
-                            setTimeout(() => {
-                                li.innerText = originalText;
-                                li.style.color = '#e4e4e7';
-                            }, 2000);
+                            li.innerText = '⚠️ 暂无版权或需VIP'; li.style.color = '#ef4444';
+                            setTimeout(() => { li.innerText = originalText; li.style.color = '#e4e4e7'; }, 2000);
                         }
                     } catch (err) {
-                        console.error("[OST Player] 解析直链失败:", err);
-                        li.innerText = '❌ 网络请求失败';
-                        li.style.color = '#ef4444';
-                        setTimeout(() => {
-                            li.innerText = originalText;
-                            li.style.color = '#e4e4e7';
-                        }, 2000);
+                        li.innerText = '❌ 网络请求失败'; li.style.color = '#ef4444';
+                        setTimeout(() => { li.innerText = originalText; li.style.color = '#e4e4e7'; }, 2000);
                     }
                 });
-                
                 searchResults.append(li);
             });
         } catch (err) {
-            console.error("[OST Player] 搜索失败:", err);
-            searchResults.html('<li style="color:#ef4444; padding:8px; font-size:11px; text-align:center;">❌ 搜索失败，请检查网络或 API 状态</li>');
+            searchResults.html('<li style="color:#ef4444; padding:8px; font-size:11px; text-align:center;">❌ 搜索失败，请检查网络或 API</li>');
         }
     });
 
-    // 允许回车键触发搜索
-    searchInput.on('keypress', function (e) {
-        if (e.which == 13) searchBtn.click();
-    });
+    searchInput.on('keypress', function (e) { if (e.which == 13) searchBtn.click(); });
 
     // =====================
-    // 统一保存逻辑
+    // 统一保存并应用逻辑
     // =====================
-    saveBtn.off('click').on('click', function() {
-        localStorage.setItem("ost_player_mode", playerMode);
+    settingsPanel.find('#ost-save-btn').off('click').on('click', function() {
+        playlistDirect = [...tempPlaylistDirect];
+        playlistSearch = [...tempPlaylistSearch];
+        activeMode = playerMode; // 当前在哪个面板，就将哪个面板设为激活模式
+
+        localStorage.setItem("ost_custom_playlist", playlistDirect.join('\n'));
+        localStorage.setItem("ost_playlist_search", JSON.stringify(playlistSearch));
+        localStorage.setItem("ost_active_mode", activeMode);
         
-        playlist = [...tempPlaylist];
-        localStorage.setItem('ost_custom_playlist', playlist.join('\n'));
+        currentPlaybackList = activeMode === "direct" ? playlistDirect : playlistSearch.map(s => s.url);
         
-        if (playlist.length > 0) {
+        if (currentPlaybackList.length > 0) {
             currentIndex = 0;
             localStorage.setItem("ost_current_index", 0);
-            audio.src = playlist[currentIndex];
-            audio.pause();
-            playBtn.text('▶️');
-            updateTrackInfo();
+            audio.src = currentPlaybackList[currentIndex];
+            audio.pause(); playBtn.text('▶️');
         } else {
-            audio.pause();
-            audio.src = "";
-            updateTrackInfo();
+            audio.pause(); audio.src = "";
         }
         
+        updateTrackInfo();
         settingsPanel.hide();
-        // 如果想要无打扰体验，可以直接注释掉下面这行 alert
-        alert("✅ 歌单保存成功！");
+        alert(`✅ ${activeMode === 'direct' ? '🔗 直链' : '🌐 搜索'}歌单已保存，并成功应用至播放器！`);
     });
 });

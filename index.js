@@ -513,7 +513,7 @@ jQuery(async function () {
         }
         
         settingsPanel.hide();
-        // 如果想要无打扰体验，可以直接注释掉下面这行 alert
+        // 想要无打扰体验，可以直接注释掉下面这行 alert
         alert("✅ 歌单保存成功！");
     });
 });

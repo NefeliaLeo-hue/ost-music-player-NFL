@@ -454,26 +454,55 @@ jQuery(async function () {
                 li.onmouseenter = () => li.style.background = 'rgba(168, 85, 247, 0.1)';
                 li.onmouseleave = () => li.style.background = 'transparent';
                 
-                li.innerText = `${song.name || '未知歌曲'} - ${song.artist || '未知歌手'}`;
+                const originalText = `${song.name || '未知歌曲'} - ${song.artist || '未知歌手'}`;
+                li.innerText = originalText;
                 
-                li.addEventListener('click', () => {
-                    // 👇 暴力调试：直接弹窗显示 API 给这首歌的数据
-                    alert(JSON.stringify(song, null, 2));
+                // 替换为“二段获取”逻辑
+                li.addEventListener('click', async () => {
+                    if (!song.id) {
+                        alert('⚠️ 获取歌曲数据异常：缺少ID');
+                        return;
+                    }
                     
-                    if(song.url) {
-                        tempPlaylist.push(song.url);
-                        renderPlaylist(); // 实时更新直链界面的列表
-                        
-                        // 可视化点击反馈
-                        const originalText = li.innerText;
-                        li.innerText = '✅ 已添加到歌单';
-                        li.style.color = '#10b981';
+                    li.innerText = '⏳ 正在解析直链...';
+                    li.style.color = '#fbbf24'; // 黄色提示
+
+                    try {
+                        // 发送二次请求：拿 id 换真实的 MP3 url
+                        const urlReq = await fetch(`https://music-api.gdstudio.xyz/api.php?types=url&id=${song.id}&source=${song.source || 'netease'}`);
+                        const urlData = await urlReq.json();
+
+                        // 兼容 API 返回的数据结构 (可能是 {url: "..."} 或 {data: {url: "..."}})
+                        let finalUrl = urlData.url || (urlData.data && urlData.data.url) || null;
+
+                        if (finalUrl && typeof finalUrl === 'string' && finalUrl.startsWith('http')) {
+                            tempPlaylist.push(finalUrl);
+                            renderPlaylist(); // 实时更新直链界面的列表
+                            
+                            // 可视化成功反馈
+                            li.innerText = '✅ 已添加到歌单';
+                            li.style.color = '#10b981';
+                            setTimeout(() => {
+                                li.innerText = originalText;
+                                li.style.color = '#e4e4e7';
+                            }, 1500);
+                        } else {
+                            // 遇到版权墙或者VIP歌曲，拿不到直链
+                            li.innerText = '⚠️ 暂无版权或需VIP';
+                            li.style.color = '#ef4444';
+                            setTimeout(() => {
+                                li.innerText = originalText;
+                                li.style.color = '#e4e4e7';
+                            }, 2000);
+                        }
+                    } catch (err) {
+                        console.error("[OST Player] 解析直链失败:", err);
+                        li.innerText = '❌ 网络请求失败';
+                        li.style.color = '#ef4444';
                         setTimeout(() => {
                             li.innerText = originalText;
                             li.style.color = '#e4e4e7';
-                        }, 1000);
-                    } else {
-                        alert('⚠️ 无法获取该歌曲的直链');
+                        }, 2000);
                     }
                 });
                 
@@ -513,7 +542,7 @@ jQuery(async function () {
         }
         
         settingsPanel.hide();
-        // 想要无打扰体验，可以直接注释掉下面这行 alert
+        // 如果想要无打扰体验，可以直接注释掉下面这行 alert
         alert("✅ 歌单保存成功！");
     });
 });

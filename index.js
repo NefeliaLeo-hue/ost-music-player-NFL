@@ -56,12 +56,12 @@ jQuery(async function () {
         <!-- 模式切换开关 -->
         <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid #3f3f46; padding-bottom: 10px;">
             <div id="ost-mode-direct" style="flex: 1; text-align: center; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🔗 直链歌单</div>
-            <div id="ost-mode-iframe" style="flex: 1; text-align: center; opacity: 0.5; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🌐 线上外链</div>
+            <div id="ost-mode-search" style="flex: 1; text-align: center; opacity: 0.5; color:#e4e4e7; font-size:12px; font-weight:bold; cursor:pointer; border-radius:4px; padding:6px 0;">🌐 在线搜索</div>
         </div>
 
         <!-- ================= 直链模式 UI ================= -->
         <div id="ost-direct-ui">
-            <div style="font-size:10px; color:#a1a1aa; margin-bottom:6px;">添加新歌曲 (Catbox 直链)：</div>
+            <div style="font-size:10px; color:#a1a1aa; margin-bottom:6px;">添加新歌曲 (直链)：</div>
             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                 <input type="text" id="ost-new-link" style="flex: 1; padding: 6px; background:#18181b; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; font-size:11px; outline:none;" placeholder="粘贴链接...">
                 <button id="ost-add-btn" style="background:#4f46e5; border:none; color:white; padding:0 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">➕ 添 加</button>
@@ -79,11 +79,16 @@ jQuery(async function () {
             </ul>
         </div>
 
-        <!-- ================= 线上外链模式 UI ================= -->
-        <div id="ost-iframe-ui" style="display: none;">
-            <p style="font-size: 11px; color: #a1a1aa; margin-top: 0; margin-bottom: 6px;">粘贴网易云/B站外链代码 (iframe)：</p>
-            <textarea id="ost-iframe-input" style="width: 100%; height: 100px; background:#18181b; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; padding:8px; font-family: monospace; font-size: 10px; resize: vertical; box-sizing:border-box; outline:none;" placeholder='例如: <iframe frameborder="no" border="0" ...></iframe>'></textarea>
-            <p style="font-size: 10px; color: #a855f7; margin-top: 8px; margin-bottom: 0;">⚠️ 提示：启用外链时，悬浮窗按键将隐藏，请操作内嵌播放器。</p>
+        <!-- ================= 在线搜索模式 UI ================= -->
+        <div id="ost-search-ui" style="display: none;">
+            <div style="font-size:10px; color:#a1a1aa; margin-bottom:6px;">搜索歌曲并添加到歌单：</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input type="text" id="ost-search-input" style="flex: 1; padding: 6px; background:#18181b; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; font-size:11px; outline:none;" placeholder="输入歌名或歌手...">
+                <button id="ost-do-search-btn" style="background:#4f46e5; border:none; color:white; padding:0 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">🔍 搜 索</button>
+            </div>
+            <ul id="ost-search-results" style="list-style: none; padding: 0; margin: 0; max-height: 140px; overflow-y: auto; border: 1px solid #3f3f46; border-radius: 6px; background: #18181b;">
+                <!-- 搜索结果动态渲染 -->
+            </ul>
         </div>
         
         <button id="ost-save-btn" style="margin-top:15px; width:100%; background:linear-gradient(135deg, #a855f7, #6366f1); border:none; color:white; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">💾 保存并应用</button>
@@ -117,7 +122,7 @@ jQuery(async function () {
     let startX, startY, initialX, initialY;
 
     playerDOM.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button, iframe')) return; 
+        if (e.target.closest('button, input')) return; 
         isDragging = true;
         isMoved = false; 
         startX = e.clientX;
@@ -163,7 +168,7 @@ jQuery(async function () {
     });
 
     // =====================
-    // 直链播放逻辑
+    // 播放核心逻辑
     // =====================
     let playTimer = null;
     audio.addEventListener("playing", () => clearTimeout(playTimer));
@@ -187,7 +192,7 @@ jQuery(async function () {
 
     playBtn.on('click', function() {
         if (playlist.length === 0) {
-            alert("请先点击 ⚙️ 齿轮按钮，输入音乐链接！");
+            alert("请先点击 ⚙️ 齿轮按钮，添加音乐！");
             settingsPanel.show();
             return;
         }
@@ -245,7 +250,7 @@ jQuery(async function () {
     settingsBtn.on('click', () => settingsPanel.toggle());
 
     // =====================
-    // 直链歌单排序与拖拽逻辑
+    // 歌单排序与拖拽逻辑
     // =====================
     let tempPlaylist = [...playlist]; 
     let isListDragging = false; 
@@ -369,7 +374,6 @@ jQuery(async function () {
         }
     });
 
-    // 【致命修复处】已修正为标准的 jQuery onClick 绑定，绝不报错
     settingsPanel.find('.ost-sort-btn').on('click', function() {
         const type = $(this).data('sort');
         if (type === 'az') tempPlaylist.sort();
@@ -382,101 +386,131 @@ jQuery(async function () {
     renderPlaylist();
 
     // =====================
-    // 双模切换 (直链 / 线上外链) 核心逻辑
+    // 双标签页 (直链 / 搜索) UI切换逻辑
     // =====================
     let playerMode = localStorage.getItem("ost_player_mode") || "direct";
-    let savedIframe = localStorage.getItem("ost_iframe_code") || "";
     
     const modeDirectBtn = settingsPanel.find('#ost-mode-direct');
-    const modeIframeBtn = settingsPanel.find('#ost-mode-iframe');
+    const modeSearchBtn = settingsPanel.find('#ost-mode-search');
     const directUI = settingsPanel.find('#ost-direct-ui');
-    const iframeUI = settingsPanel.find('#ost-iframe-ui');
-    const iframeInput = settingsPanel.find('#ost-iframe-input');
-
-    playerContainer.find('.ost-info').after('<div id="ost-iframe-wrapper" style="display:none; flex:1; overflow:hidden; border-radius: 6px; pointer-events: auto;"></div>');
-    const iframeWrapper = playerContainer.find('#ost-iframe-wrapper');
-
-    if (savedIframe) iframeInput.val(savedIframe);
+    const searchUI = settingsPanel.find('#ost-search-ui');
 
     function switchToDirectUI() {
         modeDirectBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
-        modeIframeBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
+        modeSearchBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
         directUI.show();
-        iframeUI.hide();
+        searchUI.hide();
         playerMode = "direct";
     }
 
-    function switchToIframeUI() {
-        modeIframeBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
+    function switchToSearchUI() {
+        modeSearchBtn.css({ opacity: 1, background: 'rgba(168, 85, 247, 0.2)', border: '1px solid #a855f7' });
         modeDirectBtn.css({ opacity: 0.5, background: 'transparent', border: 'none' });
-        iframeUI.show();
+        searchUI.show();
         directUI.hide();
-        playerMode = "iframe";
+        playerMode = "search";
     }
 
     modeDirectBtn.on('click', switchToDirectUI);
-    modeIframeBtn.on('click', switchToIframeUI);
+    modeSearchBtn.on('click', switchToSearchUI);
 
-    if (playerMode === "iframe") {
-        switchToIframeUI();
+    if (playerMode === "search") {
+        switchToSearchUI();
     } else {
         switchToDirectUI();
     }
 
-    function applyPlayerMode() {
-        if (playerMode === "iframe" && savedIframe.trim() !== "") {
-            if (!audio.paused) {
-                audio.pause();
-                localStorage.setItem("ost_playing", "false");
-                playBtn.text("▶️");
-            }
-            playerContainer.find('.ost-cover, .ost-info, #ost-play-btn, #ost-next-btn, #ost-loop-btn').hide();
+    // =====================
+    // 在线搜索与 API 接入逻辑
+    // =====================
+    const searchInput = settingsPanel.find('#ost-search-input');
+    const searchBtn = settingsPanel.find('#ost-do-search-btn');
+    const searchResults = settingsPanel.find('#ost-search-results');
+
+    searchBtn.on('click', async function() {
+        const keyword = searchInput.val().trim();
+        if (!keyword) return;
+
+        searchResults.html('<li style="color:#a1a1aa; padding:8px; font-size:11px; text-align:center;">🔍 搜索中...</li>');
+
+        try {
+            const response = await fetch(`https://music-api.gdstudio.xyz/api.php?types=search&source=netease&name=${encodeURIComponent(keyword)}`);
+            const data = await response.json();
+
+            searchResults.empty();
             
-            iframeWrapper.html(savedIframe).css('display', 'block');
-            iframeWrapper.find('iframe').css({
-                'width': '100%',
-                'height': '40px',
-                'border-radius': '6px',
-                'pointer-events': 'auto' 
+            // 兼容可能不同的 JSON 结构返回
+            const songs = data.data || data; 
+            if (!songs || !songs.length) {
+                searchResults.html('<li style="color:#a1a1aa; padding:8px; font-size:11px; text-align:center;">未找到结果，换个词试试？</li>');
+                return;
+            }
+
+            songs.forEach(song => {
+                const li = document.createElement('li');
+                li.style.cssText = "padding: 8px 12px; border-bottom: 1px solid #27272a; color: #e4e4e7; font-size: 11px; cursor: pointer; transition: background 0.2s;";
+                
+                // 悬停反馈效果
+                li.onmouseenter = () => li.style.background = 'rgba(168, 85, 247, 0.1)';
+                li.onmouseleave = () => li.style.background = 'transparent';
+                
+                li.innerText = `${song.name || '未知歌曲'} - ${song.artist || '未知歌手'}`;
+                
+                li.addEventListener('click', () => {
+                    if(song.url) {
+                        tempPlaylist.push(song.url);
+                        renderPlaylist(); // 实时更新直链界面的列表
+                        
+                        // 可视化点击反馈
+                        const originalText = li.innerText;
+                        li.innerText = '✅ 已添加到歌单';
+                        li.style.color = '#10b981';
+                        setTimeout(() => {
+                            li.innerText = originalText;
+                            li.style.color = '#e4e4e7';
+                        }, 1000);
+                    } else {
+                        alert('⚠️ 无法获取该歌曲的直链');
+                    }
+                });
+                
+                searchResults.append(li);
             });
-        } else {
-            iframeWrapper.hide().empty();
-            playerContainer.find('#ost-play-btn, #ost-next-btn, #ost-loop-btn').show();
-            playerContainer.find('.ost-cover').css('display', 'flex');
-            playerContainer.find('.ost-info').css('display', 'flex');
+        } catch (err) {
+            console.error("[OST Player] 搜索失败:", err);
+            searchResults.html('<li style="color:#ef4444; padding:8px; font-size:11px; text-align:center;">❌ 搜索失败，请检查网络或 API 状态</li>');
         }
-    }
+    });
 
-    applyPlayerMode();
+    // 允许回车键触发搜索
+    searchInput.on('keypress', function (e) {
+        if (e.which == 13) searchBtn.click();
+    });
 
+    // =====================
+    // 统一保存逻辑
+    // =====================
     saveBtn.off('click').on('click', function() {
         localStorage.setItem("ost_player_mode", playerMode);
         
-        if (playerMode === "iframe") {
-            savedIframe = iframeInput.val().trim();
-            localStorage.setItem("ost_iframe_code", savedIframe);
-            applyPlayerMode();
-            settingsPanel.hide();
-            alert("✅ 线上外链应用成功！");
+        playlist = [...tempPlaylist];
+        localStorage.setItem('ost_custom_playlist', playlist.join('\n'));
+        
+        if (playlist.length > 0) {
+            currentIndex = 0;
+            localStorage.setItem("ost_current_index", 0);
+            audio.src = playlist[currentIndex];
+            audio.pause();
+            playBtn.text('▶️');
+            updateTrackInfo();
         } else {
-            playlist = [...tempPlaylist];
-            localStorage.setItem('ost_custom_playlist', playlist.join('\n'));
-            
-            if (playlist.length > 0) {
-                currentIndex = 0;
-                localStorage.setItem("ost_current_index", 0);
-                audio.src = playlist[currentIndex];
-                audio.pause();
-                playBtn.text('▶️');
-                updateTrackInfo();
-            } else {
-                audio.pause();
-                audio.src = "";
-                updateTrackInfo();
-            }
-            applyPlayerMode();
-            settingsPanel.hide();
-            alert("✅ 直链歌单保存成功！");
+            audio.pause();
+            audio.src = "";
+            updateTrackInfo();
         }
+        
+        settingsPanel.hide();
+        // 想要无打扰体验，可以直接注释掉下面这行 alert
+        alert("✅ 歌单保存成功！");
     });
 });

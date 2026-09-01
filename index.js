@@ -85,7 +85,6 @@ jQuery(async function () {
         try {
             playlistDirect = JSON.parse(savedDirect);
         } catch(e) {
-            // 向下兼容：旧版换行符分割的URL纯文本，自动转换为新结构
             playlistDirect = savedDirect.split("\n").filter(l => l.trim() !== "").map(url => ({ type: 'url', name: url, url: url }));
         }
     }
@@ -105,7 +104,7 @@ jQuery(async function () {
     let audio = new Audio();
     audio.volume = Number(localStorage.getItem("ost_volume")) || 0.5;
     let wasPlaying = localStorage.getItem("ost_playing") === "true";
-    let currentBlobUrl = null; // 用于释放本地文件的内存
+    let currentBlobUrl = null; 
 
     // =====================
     // 注入 HTML 
@@ -186,7 +185,7 @@ jQuery(async function () {
     let isDragging = false, isMoved = false; 
     let startX, startY, initialX, initialY;
     playerDOM.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button, input')) return; 
+        if (e.target.closest('button, input, .ost-edit-btn, .ost-delete-btn')) return; 
         isDragging = true; isMoved = false; 
         startX = e.clientX; startY = e.clientY;
         const rect = playerDOM.getBoundingClientRect();
@@ -206,13 +205,12 @@ jQuery(async function () {
     playerContainer.on('click', function() { if ($(this).hasClass('minimized') && !isMoved) $(this).removeClass('minimized'); });
 
     // =====================
-    // 异步播放核心逻辑 (支持解析本地库)
+    // 异步播放核心逻辑
     // =====================
     async function applyAndPlayTrack(index, autoPlay = true) {
         if (currentPlaybackList.length === 0) return;
         const item = currentPlaybackList[index];
         
-        // 释放上一个本地文件的内存
         if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
         
         audio.pause();
@@ -225,7 +223,7 @@ jQuery(async function () {
                 src = currentBlobUrl;
             } else {
                 console.error("[OST Player] Local file not found in DB:", item.name);
-                src = ""; // 会导致播放失败并触发跳过
+                src = ""; 
             }
         } else {
             src = item.url;
@@ -254,7 +252,8 @@ jQuery(async function () {
         trackNum.text(`Track ${displayNum} / ${currentPlaybackList.length}`);
         
         const currentItem = currentPlaybackList[currentIndex];
-        const displayTitle = (activeMode === "search" || currentItem.type === 'local') ? currentItem.name : "ARCHIVE_OST";
+        // 允许任何带有自定义名称的歌曲显示名字
+        const displayTitle = currentItem.name && currentItem.name !== currentItem.url ? currentItem.name : "ARCHIVE_OST";
         
         if (displayTitle !== "ARCHIVE_OST") {
             playerContainer.find('.ost-title').text(displayTitle).css({
@@ -266,12 +265,8 @@ jQuery(async function () {
         }
     }
     
-    // 初始化时如果原本在播放，自动加载
-    if (currentPlaybackList.length > 0) {
-        applyAndPlayTrack(currentIndex, wasPlaying);
-    } else {
-        updateTrackInfo();
-    }
+    if (currentPlaybackList.length > 0) applyAndPlayTrack(currentIndex, wasPlaying);
+    else updateTrackInfo();
 
     audio.addEventListener("playing", () => localStorage.setItem("ost_playing", "true"));
     audio.addEventListener("error", () => console.log("[OST Player] 音频错误:", audio.error));
@@ -318,11 +313,14 @@ jQuery(async function () {
         container.innerHTML = '';
         
         tempArray.forEach((item, index) => {
+            // 给每个项分配一个临时唯一ID，防止同名歌曲拖拽时数据错乱
+            if (!item._uid) item._uid = Math.random().toString(36).substring(2, 9);
+
             const li = document.createElement('li');
             li.className = 'ost-playlist-item';
+            li.setAttribute('data-uid', item._uid);
             li.style.cssText = "display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid #27272a; background: #18181b; user-select: none; box-sizing: border-box;";
             
-            // 区分图标
             const typeIcon = item.type === 'local' ? '📁' : (item.type === 'url' ? '🔗' : '🎵');
             const displayText = item.name || item.url;
 
@@ -330,14 +328,27 @@ jQuery(async function () {
                 <span class="ost-drag-handle" title="按住拖动" style="cursor: grab; padding-right: 12px; color: #52525b; font-size: 14px; touch-action: none;">☰</span>
                 <span style="font-size:10px; margin-right:6px;" title="${item.type}">${typeIcon}</span>
                 <span class="ost-item-text" title="${displayText}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a1a1aa; font-size: 11px;">${displayText}</span>
-                <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 8px; padding: 2px 6px;">❌</span>
+                <span class="ost-edit-btn" title="修改歌名" style="cursor: pointer; color: #60a5fa; margin-left: 8px; padding: 2px 4px;">✏️</span>
+                <span class="ost-delete-btn" title="删除" style="cursor: pointer; color: #ef4444; margin-left: 2px; padding: 2px 4px;">❌</span>
             `;
 
+            // 重命名逻辑
+            li.querySelector('.ost-edit-btn').addEventListener('click', () => {
+                const currentName = item.name || item.url;
+                const newName = prompt("请输入自定义歌名 (例如: 歌名 - 歌手):", currentName);
+                if (newName !== null && newName.trim() !== "") {
+                    item.name = newName.trim();
+                    updateAllUI(); 
+                }
+            });
+
+            // 删除逻辑
             li.querySelector('.ost-delete-btn').addEventListener('click', () => {
                 tempArray.splice(index, 1);
                 renderDraggableList(containerId, tempArray);
             });
 
+            // 拖拽逻辑
             const handle = li.querySelector('.ost-drag-handle');
             handle.addEventListener('pointerdown', (e) => {
                 if (isListDragging) return;
@@ -374,12 +385,12 @@ jQuery(async function () {
                     li.style.cssText = originalCssText;
                     handle.removeEventListener('pointermove', onPointerMove); handle.removeEventListener('pointerup', cleanupDrag); handle.removeEventListener('pointercancel', cleanupDrag);
                     
-                    // 重建数组结构 (映射回原对象)
+                    // 通过唯一的 _uid 精准重建数组结构
                     const currentDOMItems = [...container.querySelectorAll('.ost-playlist-item')];
                     const newTempArray = [];
                     currentDOMItems.forEach(domLi => {
-                        const titleText = domLi.querySelector('.ost-item-text').getAttribute('title');
-                        const matchingItem = tempArray.find(obj => (obj.name || obj.url) === titleText);
+                        const uid = domLi.getAttribute('data-uid');
+                        const matchingItem = tempArray.find(obj => obj._uid === uid);
                         if (matchingItem) newTempArray.push(matchingItem);
                     });
                     tempArray.length = 0;
@@ -401,8 +412,8 @@ jQuery(async function () {
     updateAllUI();
 
     const closeSettings = () => {
-        tempPlaylistDirect = [...playlistDirect];
-        tempPlaylistSearch = [...playlistSearch];
+        tempPlaylistDirect = JSON.parse(JSON.stringify(playlistDirect)); 
+        tempPlaylistSearch = JSON.parse(JSON.stringify(playlistSearch));
         updateAllUI();
         settingsPanel.hide();
     };
@@ -471,17 +482,17 @@ jQuery(async function () {
             const file = files[i];
             const uniqueId = 'local_' + Date.now() + '_' + i;
             
-            // 将文件存入 IndexedDB
             try {
                 await OST_DB.save(uniqueId, file);
-                tempPlaylistDirect.push({ type: 'local', id: uniqueId, name: file.name });
+                // 上传本地文件时，直接用原本的文件名作为初始显示名称
+                tempPlaylistDirect.push({ type: 'local', id: uniqueId, name: file.name.replace(/\.[^/.]+$/, "") });
             } catch (err) {
                 console.error("保存本地文件失败:", err);
                 alert(`文件 ${file.name} 保存失败`);
             }
         }
         updateAllUI();
-        fileInput.value = ''; // 清空选择
+        fileInput.value = ''; 
     });
 
     // =====================
@@ -551,8 +562,9 @@ jQuery(async function () {
     // 统一保存与智能清理逻辑
     // =====================
     settingsPanel.find('#ost-save-btn').off('click').on('click', async function() {
-        playlistDirect = [...tempPlaylistDirect];
-        playlistSearch = [...tempPlaylistSearch];
+        // 清理由于取消编辑等原因可能残留的 _uid 属性，保持本地存储干净
+        playlistDirect = tempPlaylistDirect.map(item => { const { _uid, ...rest } = item; return rest; });
+        playlistSearch = tempPlaylistSearch.map(item => { const { _uid, ...rest } = item; return rest; });
         activeMode = playerMode; 
 
         localStorage.setItem("ost_custom_playlist", JSON.stringify(playlistDirect));
